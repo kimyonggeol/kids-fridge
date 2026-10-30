@@ -1,5 +1,5 @@
 // 앱 화면은 캐시 우선(백그라운드 갱신), 레시피 데이터는 네트워크 우선
-const CACHE = 'kf-v1.0.0';
+const CACHE = 'kf-v2.0.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
   'data/ingredients.json', 'data/recipes.json', 'data/version.json'];

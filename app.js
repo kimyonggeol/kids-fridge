@@ -1,9 +1,9 @@
-/* 아이 냉장고 파먹기 — PWA
- * 데이터: data/ingredients.json, data/recipes.json (자동 업데이트)
+/* 아이 냉장고 파먹기 — PWA v2
+ * 데이터: data/ingredients.json, data/recipes.json (schema 2, 자동 업데이트)
  * 저장: localStorage (+ Supabase 가족 공유)
  */
 const CFG = window.KF_CONFIG || {};
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '2.0.0';
 
 /* ───────────── 유틸 ───────────── */
 const $ = (s, el = document) => el.querySelector(s);
@@ -30,11 +30,19 @@ const MEALS = ['아침', '점심', '저녁', '간식'];
 const MEAL_DEFAULT_CATS = { '아침': ['밥죽', '반찬'], '점심': ['밥죽', '메인', '국'], '저녁': ['밥죽', '메인', '반찬', '국'], '간식': ['간식', '핑거'] };
 const TOOLS = ['냄비', '프라이팬', '전자레인지', '에어프라이어', '오븐', '밥솥', '찜기', '믹서'];
 const ALLERGENS = ['달걀', '우유', '밀', '대두', '땅콩', '견과', '갑각류', '생선', '조개', '오징어', '소고기', '돼지고기', '닭고기', '토마토', '복숭아', '참깨'];
-const ING_CATS = ['곡류·면', '채소', '버섯', '과일', '육류', '생선·해산물', '해조류', '달걀·유제품', '두부·콩·견과', '양념·소스', '가공·기타'];
-const ING_IC = { '곡류·면': '🌾', '채소': '🥕', '버섯': '🍄', '과일': '🍎', '육류': '🥩', '생선·해산물': '🐟', '해조류': '🌿', '달걀·유제품': '🥚', '두부·콩·견과': '🫘', '양념·소스': '🧂', '가공·기타': '📦' };
+const ING_CATS = ['냉동식품', '곡류·면', '채소', '버섯', '과일', '육류', '생선·해산물', '해조류', '달걀·유제품', '두부·콩·견과', '양념·소스', '가공·기타'];
+const ING_IC = { '냉동식품': '❄️', '곡류·면': '🌾', '채소': '🥕', '버섯': '🍄', '과일': '🍎', '육류': '🥩', '생선·해산물': '🐟', '해조류': '🌿', '달걀·유제품': '🥚', '두부·콩·견과': '🫘', '양념·소스': '🧂', '가공·기타': '📦' };
 const NUTRI = { '곡류·면': '탄수화물', '육류': '단백질', '생선·해산물': '단백질', '두부·콩·견과': '단백질', '채소': '채소', '버섯': '채소', '해조류': '채소', '과일': '과일' };
-const CARB_VEG = new Set(['감자', '고구마', '단호박', '옥수수', '밤']);
+const CARB_VEG = new Set(['감자', '고구마', '단호박', '옥수수', '밤', '밥', '냉동 밥']);
 const PROTEIN_CATS = new Set(['육류', '생선·해산물']);
+const ADULT_P = 2.2;                 // 어른 1명 = 유아(2~3세) 1인분의 2.2배
+const LEVEL_MULT = [0, 0.5, 1, 1.5, 2];
+const SALTY = new Set(['소금', '아기간장', '국간장', '진간장', '된장', '고추장', '쌈장', '설탕', '올리고당', '케첩', '굴소스', '짜장가루', '매실청', '멸치액젓', '새우젓', '마요네즈', '꿀', '메이플시럽', '돈가스소스', '피시소스', '초고추장']);
+const UNIT_BATCHIM = { 'g': 'ㅁ', 'ml': '', '개': '', '큰술': 'ㄹ', '작은술': 'ㄹ', '컵': 'ㅂ', '장': 'ㅇ', '쪽': 'ㄱ', '꼬집': 'ㅂ', '방울': 'ㄹ', '줌': 'ㅁ', '대': '', '송이': '' };
+const EACH_G = { '달걀': 50, '달걀노른자': 17, '메추리알': 10, '밤': 15, '대추': 4, '만두': 25, '유부': 10, '전복': 60, '옥수수': 200, '떡뻥': 1, '냉동 돈가스': 120, '냉동 치킨너겟': 20, '냉동 동그랑땡': 25, '냉동 생선까스': 100, '소고기 큐브': 20, '채소 큐브': 20, '마늘': 5, '청양고추': 10, '페페론치노': 0.3 };
+const SHEET_G = { '김': 2, '식빵': 35, '또띠아': 40, '아기치즈': 18, '다시마': 0 };
+const NO_YIELD = new Set(['국물용 멸치', '다시마']);
+const RAW_X = { '쌀': 1, '쌀가루': 1, '귀리': 1, '누룽지': 1.5, '소면': 2.5, '스파게티면': 2.3, '마카로니': 2.3, '칼국수면': 2, '당면': 3, '쌀국수': 2.5, '검은콩': 2 };
 
 const STAGES = [
   { max: 6, key: '초기', label: '이유식 초기', texture: '곱게 갈아 체에 거른 미음 (10배죽)', size: '완전히 곱게', season: '간을 하지 않아요', portion: 0.35, freq: '하루 1회 · 한 번에 30~80ml', tip: '한 가지 새 재료는 2~3일 간격으로, 오전에 시작해 반응을 확인해요.' },
@@ -58,30 +66,43 @@ const GENERAL_RULES = [
   ['🥚', '알레르기 식품', '달걀·우유·밀·땅콩·견과·갑각류 등은 처음 줄 때 소량을 오전에 주고 2~3일 반응을 지켜봐요.'],
   ['🌶️', '매운맛', '고추장·고춧가루는 만 3세 이후 아주 조금씩. 김치는 물에 헹궈서 주세요.'],
   ['🐟', '생선', '가시를 손으로 꼼꼼히 확인해요. 수은이 걱정되는 큰 생선(참치, 황새치 등)은 자주 주지 마세요.'],
+  ['❄️', '냉동 국·이유식', '냉장실에서 해동한 뒤 냄비에서 팔팔 끓여 식혀 주세요. 한 번 해동한 건 다시 얼리지 않아요.'],
 ];
+const STEP_ICONS = [
+  [/불려|불리/g, '💧'], [/핏물/g, '💧'], [/씻어|헹궈|해감|씻고/g, '🚿'], [/갈아|갈고/g, '🌀'], [/체에|걸러/g, '🥄'],
+  [/구워|굽고|굽거나|구운/g, '🔥'], [/쪄|찌거나|찜기|중탕/g, '♨️'], [/데쳐|삶아|삶고/g, '♨️'],
+  [/볶아|볶다|볶고|볶은/g, '🍳'], [/부쳐|부치/g, '🍳'], [/끓여|끓이|끓으|졸여|졸이/g, '🍲'], [/재워/g, '⏳'],
+  [/썰어|썰고|다져|다지고|깍둑|잘라|자르고|떼고|떼어|벗기|벗겨|찢어|찢고|손질|파내/g, '🔪'], [/으깨/g, '🥄'],
+  [/간해|간을 맞|간하고/g, '🧂'], [/섞어|섞고|버무려|무쳐|비벼|풀어|저어/g, '🥣'], [/빚어|뭉쳐|말아|채워|꽂아/g, '🤲'], [/식혀|얼린|얼려/g, '❄️'],
+  [/담아|올려|곁들|뿌려|둘러/g, '🍽️'],
+];
+function stepIcon(t) {
+  let best = null, bi = -1;
+  for (const [re, ic] of STEP_ICONS) { re.lastIndex = 0; let m; while ((m = re.exec(t))) { if (m.index >= bi) { bi = m.index; best = ic; } } }
+  return best || '👩‍🍳';
+}
 
 /* ───────────── 상태 ───────────── */
-const SYNC_KEYS = ['children', 'fridge', 'staples', 'tools', 'favorites', 'ratings', 'history', 'shopping'];
-let DATA = null;           // {ingredients:{groups,items}, recipes:{items}, version}
-let ING = {};              // name -> ingredient
-let RECIPES = [], RECIPE_BY_ID = {};
-const defaultState = () => ({ children: [], fridge: [], staples: null, tools: TOOLS.slice(), favorites: [], ratings: {}, history: [], shopping: [] });
+const SYNC_KEYS = ['children', 'fridge', 'staples', 'tools', 'favorites', 'ratings', 'history', 'shopping', 'prefs'];
+let DATA = null, ING = {}, RECIPES = [], RECIPE_BY_ID = {}, GROUP_OF = {};
+const defaultPrefs = () => ({ adult: false, adults: 2, spicy: false });
+const defaultState = () => ({ children: [], fridge: [], staples: null, tools: TOOLS.slice(), favorites: [], ratings: {}, history: [], shopping: [], prefs: defaultPrefs() });
 let state = Object.assign(defaultState(), LS.get('kf_state', {}));
-let meta = Object.assign({ stamps: {}, pending: [], familyId: null, recForm: null, lastUpdateCheck: 0 }, LS.get('kf_meta', {}));
-const ui = { tab: 'rec', more: null, detail: null, picker: null, kidEdit: null, sheet: null, fridgeQ: '', fridgeCat: '전체', recipeQ: '', recipeCat: '전체', recipeFav: false, recipeFit: true, guideKid: null, guideMonth: 12, guideQ: '', rec: null, recResults: null, recShown: 3 };
+state.prefs = Object.assign(defaultPrefs(), state.prefs || {});
+let meta = Object.assign({ stamps: {}, pending: [], familyId: null, recForm: null, lastUpdateCheck: 0, skip: { date: '', ids: [] } }, LS.get('kf_meta', {}));
+const ui = { tab: 'rec', more: null, detail: null, picker: null, kidEdit: null, sheet: null, fridgeQ: '', fridgeCat: '전체', recipeQ: '', recipeCat: '전체', recipeFav: false, recipeFit: true, guideKid: null, guideMonth: 12, guideQ: '', rec: null, R: null };
 
 function saveLocal() { LS.set('kf_state', state); LS.set('kf_meta', meta); }
+function touch(key) { meta.stamps[key] = new Date().toISOString(); if (!meta.pending.includes(key)) meta.pending.push(key); }
 function setKey(key, value, opts = {}) {
-  state[key] = value;
-  meta.stamps[key] = new Date().toISOString();
-  if (!meta.pending.includes(key)) meta.pending.push(key);
-  saveLocal();
-  Sync.schedule();
+  state[key] = value; touch(key); saveLocal(); Sync.schedule();
   if (opts.render !== false) render();
 }
 const kids = () => state.children || [];
 const kidById = id => kids().find(k => k.id === id);
-const haveSet = () => new Set([...(state.fridge || []), ...(state.staples || [])]);
+const prefs = () => state.prefs || defaultPrefs();
+function setPrefs(p) { setKey('prefs', Object.assign({}, prefs(), p)); }
+function skipIds() { if (meta.skip?.date !== todayStr()) meta.skip = { date: todayStr(), ids: [] }; return meta.skip.ids; }
 
 /* ───────────── 데이터 로딩 ───────────── */
 async function fetchJSON(path, noStore) {
@@ -90,25 +111,23 @@ async function fetchJSON(path, noStore) {
   return r.json();
 }
 function applyData(d) {
-  DATA = d;
-  ING = {};
+  DATA = d; ING = {}; GROUP_OF = {};
   for (const i of d.ingredients.items) ING[i.n] = i;
+  for (const [g, mem] of Object.entries(d.ingredients.groups)) for (const n of mem) GROUP_OF[n] = g;
   RECIPES = d.recipes.items;
   RECIPE_BY_ID = Object.fromEntries(RECIPES.map(r => [r.id, r]));
-  if (!state.staples) { state.staples = d.ingredients.items.filter(i => i.st).map(i => i.n); saveLocal(); }
+  if (!state.staples) { state.staples = d.ingredients.items.filter(i => i.st && i.k !== 'hidden').map(i => i.n); saveLocal(); }
+}
+async function fetchAllData() {
+  const [ingredients, recipes] = await Promise.all([fetchJSON('ingredients.json', true), fetchJSON('recipes.json', true)]);
+  const d = { ingredients, recipes, version: recipes.v };
+  LS.set('kf_data', d); applyData(d); return d;
 }
 async function loadData() {
   const cached = LS.get('kf_data', null);
-  if (cached) applyData(cached);
-  try {
-    if (!cached) {
-      const [ingredients, recipes] = await Promise.all([fetchJSON('ingredients.json', true), fetchJSON('recipes.json', true)]);
-      const d = { ingredients, recipes, version: recipes.v };
-      LS.set('kf_data', d); applyData(d);
-    }
-  } catch (e) {
-    if (!cached) throw e;
-  }
+  if (cached && cached.recipes?.schema === 2) { applyData(cached); return; }
+  try { await fetchAllData(); }
+  catch (e) { if (cached && cached.recipes?.schema === 2) applyData(cached); else throw e; }
 }
 async function checkDataUpdate(manual) {
   try {
@@ -116,9 +135,7 @@ async function checkDataUpdate(manual) {
     meta.lastUpdateCheck = Date.now(); saveLocal();
     if (DATA && v.v === DATA.version) { if (manual) toast(`최신 레시피예요 (${RECIPES.length}개)`); return; }
     const before = RECIPES.length;
-    const [ingredients, recipes] = await Promise.all([fetchJSON('ingredients.json', true), fetchJSON('recipes.json', true)]);
-    const d = { ingredients, recipes, version: recipes.v };
-    LS.set('kf_data', d); applyData(d);
+    await fetchAllData();
     const diff = RECIPES.length - before;
     toast(diff > 0 ? `새 레시피 ${diff}개가 추가됐어요 🎉 (총 ${RECIPES.length}개)` : '레시피 DB가 업데이트됐어요');
     render();
@@ -146,8 +163,8 @@ function matchIng(ing, q) {
   if (isCho(q)) return cho(norm(ing.n)).includes(q) || ing.s.some(x => cho(norm(x)).includes(q));
   return norm(ing.n).includes(q) || ing.s.some(x => norm(x).includes(q));
 }
-function searchIng(q, cat) {
-  let list = DATA.ingredients.items;
+function searchIng(q, cat, opts = {}) {
+  let list = DATA.ingredients.items.filter(i => i.k !== 'hidden' && !(opts.noAdult && i.k === 'adult') && !(opts.noSoup && i.k === 'soup'));
   if (cat && cat !== '전체') list = list.filter(i => i.c === cat);
   if (!q) return list;
   const nq = norm(q), c = isCho(nq), key = n => c ? cho(norm(n)) : norm(n);
@@ -158,9 +175,19 @@ function searchIng(q, cat) {
   });
 }
 
+/* ───────────── 보유 재료 (냉동 대체 포함) ───────────── */
+function expandHave(names) {
+  const have = new Set(names), from = {};
+  for (const n of names) for (const b of (ING[n]?.sub || [])) if (!have.has(b)) { have.add(b); from[b] = n; }
+  for (const i of DATA.ingredients.items) if (i.k === 'hidden') have.add(i.n);
+  return { have, from };
+}
+
 /* ───────────── 추천 엔진 ───────────── */
 function makeCtx(kidList, opts = {}) {
   const months = kidList.map(k => monthsOld(k.birth));
+  const H = expandHave([...(state.fridge || []), ...(state.staples || [])]);
+  const F = expandHave(state.fridge || []);
   return Object.assign({
     kids: kidList, months,
     youngest: months.length ? Math.min(...months) : 999,
@@ -168,8 +195,8 @@ function makeCtx(kidList, opts = {}) {
     allergy: new Set(kidList.flatMap(k => k.allergies || [])),
     avoid: new Set(kidList.flatMap(k => k.avoid || [])),
     dislikes: new Set(kidList.flatMap(k => k.dislikes || [])),
-    have: haveSet(), fridge: new Set(state.fridge || []),
-    meal: null, maxTime: 0, allowMissing: 99, tools: null, strict: true,
+    have: H.have, subFrom: H.from, fridge: F.have,
+    meal: null, maxTime: 0, allowMissing: 99, tools: null, strict: true, adult: false, soup: null,
   }, opts);
 }
 function ingBlock(ing, ctx) {
@@ -180,11 +207,11 @@ function ingBlock(ing, ctx) {
   if (ctx.avoid.has(ing.n)) return '피하는 재료';
   return null;
 }
-function resolveItem(item, ctx) {
+function resolveItem(item, ctx, noBlock) {
   const cands = item.g ? DATA.ingredients.groups[item.g] : [item.i];
   const allowed = [], blocked = [];
   for (const n of cands) {
-    const ing = ING[n]; const why = ingBlock(ing, ctx);
+    const ing = ING[n]; const why = noBlock ? null : ingBlock(ing, ctx);
     (why ? blocked : allowed).push({ ing, why });
   }
   const have = allowed.find(x => ctx.have.has(x.ing.n));
@@ -192,123 +219,293 @@ function resolveItem(item, ctx) {
     item, label: item.g || item.i, group: !!item.g,
     ok: allowed.length > 0, why: blocked[0]?.why,
     have: have ? have.ing : null, use: (have || allowed[0])?.ing || null,
+    sub: have ? ctx.subFrom[have.ing.n] : null,
     alts: allowed.map(x => x.ing.n),
   };
 }
+const adultOK = r => r.m[1] >= 12 && r.ad && r.ad.sc > 0;
 function evalRecipe(r, ctx) {
+  const adapt = r.m[0] > ctx.youngest;
   if (ctx.strict) {
-    // 나이가 다른 아이들: 큰 아이 메뉴를 만들고 어린 아이 몫을 덜어 질감을 맞추는 방식 허용 (9개월 이상)
-    if (r.m[0] > ctx.youngest && !(ctx.kids.length > 1 && ctx.youngest >= 9 && r.m[0] <= 15 && ctx.oldest >= r.m[0])) return null;
+    if (adapt && !(ctx.kids.length > 1 && ctx.youngest >= 9 && r.m[0] <= 15 && ctx.oldest >= r.m[0])) return null;
     if (ctx.youngest > r.m[1] + (r.m[1] < 12 ? 2 : 12)) return null;
     if (ctx.maxTime && r.t > ctx.maxTime) return null;
     if (ctx.tools && r.tl.length && !r.tl.some(t => ctx.tools.includes(t))) return null;
+    if (ctx.adult && !adultOK(r)) return null;
   }
   const req = r.r.map(it => resolveItem(it, ctx));
   if (ctx.strict && req.some(x => !x.ok)) return null;
   const missing = req.filter(x => x.ok && !x.have);
   if (missing.length > ctx.allowMissing) return null;
   const opt = r.o.map(it => resolveItem(it, ctx));
-  const sea = r.s.map(it => resolveItem(it, { ...ctx, youngest: Math.max(ctx.oldest, 12) })); // 간은 큰 아이 기준, 어린 아이 몫은 덜어내기로 처리
+  const sea = r.s.map(it => resolveItem(it, { ...ctx, youngest: Math.max(ctx.oldest, 12) }));
+  const adI = ctx.adult && r.ad ? (r.ad.i || []).map(it => resolveItem(it, ctx, true)) : [];
   const used = [...req, ...opt.filter(x => x.ok && x.have)].map(x => x.use).filter(Boolean);
-  const fridgeUsed = used.filter(i => ctx.fridge.has(i.n)).map(i => i.n);
+  const fridgeUsed = [...new Set(used.filter(i => ctx.fridge.has(i.n)).map(i => ctx.subFrom[i.n] || i.n))];
   let score = 100 * (req.length ? (req.length - missing.length) / req.length : 1) - 30 * missing.length;
-  score += 6 * opt.filter(x => x.ok && x.have).length + 4 * new Set(fridgeUsed).size;
+  score += 6 * opt.filter(x => x.ok && x.have).length + 4 * fridgeUsed.length;
   if ((state.favorites || []).includes(r.id)) score += 15;
   score += 4 * ((state.ratings || {})[r.id] || 0);
   if (ctx.meal) score += r.ml.includes(ctx.meal) ? 10 : -15;
   if (ctx.oldest > r.m[1]) score -= ctx.oldest > r.m[1] + 12 ? 45 : 15;
-  const adapt = r.m[0] > ctx.youngest;
   if (adapt) score -= 10;
+  if (ctx.adult) score += 4 * (r.ad?.sc || 0) + 2 * adI.filter(x => x.have).length;
   const dislikeHits = used.filter(i => ctx.dislikes.has(i.n)).map(i => i.n);
   score -= 12 * dislikeHits.length;
   const last = lastEaten(r.id);
   if (last != null) score -= last <= 2 ? 40 : last <= 5 ? 20 : last <= 10 ? 8 : 0;
-  // 새 재료 (먹어본 재료를 기록 중인 아기만)
   const newIngs = [];
   ctx.kids.forEach((k, i) => {
     if (ctx.months[i] >= 24 || !(k.tried || []).length) return;
-    for (const ing of used) if (!(k.tried || []).includes(ing.n) && ing.c !== '양념·소스' && !newIngs.includes(ing.n)) newIngs.push(ing.n);
+    for (const ing of used) if (!(k.tried || []).includes(ing.n) && ing.c !== '양념·소스' && ing.k !== 'hidden' && !newIngs.includes(ing.n)) newIngs.push(ing.n);
   });
   if (newIngs.length > 1) score -= 15 * (newIngs.length - 1);
   score += Math.random() * 6;
-  return { r, score, req, opt, sea, missing, used, fridgeUsed, dislikeHits, newIngs, lastDays: last, adapt };
+  return { r, score, req, opt, sea, adI, missing, used, fridgeUsed, dislikeHits, newIngs, lastDays: last, adapt };
 }
 function lastEaten(rid) {
   const t = todayStr(); let best = null;
   for (const h of state.history || []) if (h.rids.includes(rid)) { const d = daysBetween(h.date, t); if (best == null || d < best) best = d; }
   return best;
 }
+const soupContents = name => (ING[name]?.soup || []);
+const ingOrGroup = n => ING[n] || (DATA.ingredients.groups[n] ? ING[DATA.ingredients.groups[n][0]] : null);
 function nutriOf(ings) {
   const s = new Set();
   for (const i of ings) {
+    if (!i) continue;
     if (CARB_VEG.has(i.n)) s.add('탄수화물');
     if (NUTRI[i.c]) s.add(NUTRI[i.c]);
     if (i.c === '달걀·유제품') s.add(/달걀|메추리/.test(i.n) ? '단백질' : '칼슘');
   }
   return s;
 }
-function recommend(form) {
-  const kidList = form.kidIds.map(kidById).filter(Boolean);
-  const ctx = makeCtx(kidList, { meal: form.meal, maxTime: form.maxTime || 0, allowMissing: form.allowMissing, tools: state.tools?.length ? state.tools : null });
-  const pools = [], emptyCats = [];
-  for (const c of form.cats) {
-    const list = RECIPES.filter(r => r.c === c).map(r => evalRecipe(r, ctx)).filter(Boolean).sort((a, b) => b.score - a.score);
-    if (list.length) pools.push({ c, list: list.slice(0, form.cats.length > 3 ? 5 : 7) }); else emptyCats.push(c);
+
+/* 추천: 카테고리별 후보 풀 → 한 끼 조합 */
+function recForm() {
+  if (!ui.rec) {
+    const h = new Date().getHours();
+    const meal = h < 10 ? '아침' : h < 15 ? '점심' : h < 17 ? '간식' : '저녁';
+    const saved = meta.recForm || {};
+    ui.rec = { kidIds: kids().map(k => k.id), meal, cats: MEAL_DEFAULT_CATS[meal].slice(), maxTime: saved.maxTime || 0, allowMissing: saved.allowMissing ?? 0, soup: null };
   }
+  ui.rec.kidIds = ui.rec.kidIds.filter(id => kidById(id));
+  if (!ui.rec.kidIds.length && kids().length) ui.rec.kidIds = kids().map(k => k.id);
+  if (ui.rec.soup && !(state.fridge || []).includes(ui.rec.soup)) ui.rec.soup = null;
+  return ui.rec;
+}
+const selKids = f => f.kidIds.map(kidById).filter(Boolean);
+const canAdult = f => selKids(f).some(k => monthsOld(k.birth) >= 12);
+const adultOn = f => !!prefs().adult && canAdult(f);
+const effCats = f => f.soup ? f.cats.filter(c => c !== '국') : f.cats;
+function recCtx(f) {
+  return makeCtx(selKids(f), { meal: f.meal, maxTime: f.maxTime || 0, allowMissing: f.allowMissing, tools: state.tools?.length ? state.tools : null, adult: adultOn(f), soup: f.soup });
+}
+function startRec() {
+  const f = recForm(), ctx = recCtx(f);
+  const pools = {}, emptyCats = [];
+  for (const c of effCats(f)) {
+    const list = RECIPES.filter(r => r.c === c).map(r => evalRecipe(r, ctx)).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 60);
+    if (list.length) pools[c] = list; else emptyCats.push(c);
+  }
+  ui.R = { f: JSON.parse(JSON.stringify(f)), adult: ctx.adult, pools, emptyCats, seen: new Set(), slotTried: {}, combos: [], notice: '', youngest: ctx.youngest, round: 0 };
+  nextCombos();
+}
+function nextCombos() {
+  const R = ui.R, skip = new Set(skipIds()), exhausted = [];
+  const pools = {};
+  for (const [c, list] of Object.entries(R.pools)) {
+    let l = list.filter(e => !skip.has(e.r.id) && !R.seen.has(e.r.id));
+    if (!l.length) { l = list.filter(e => !skip.has(e.r.id)); if (R.round) exhausted.push(c); for (const e of l) R.seen.delete(e.r.id); }
+    if (l.length) pools[c] = l;
+  }
+  R.notice = exhausted.length ? `${exhausted.map(c => CAT_INFO[c].label).join(', ')}: 조건에 맞는 후보를 모두 보셨어요. 처음 후보부터 다시 보여드려요.` : '';
+  R.combos = buildCombos(pools, R.f, 3);
+  for (const c of R.combos) for (const d of c.dishes) R.seen.add(d.r.id);
+  R.slotTried = {}; R.round++;
+}
+function buildCombos(pools, f, max) {
+  const cats = Object.keys(pools);
+  const k = cats.length > 3 ? 4 : cats.length > 2 ? 5 : 7;
+  const top = cats.map(c => pools[c].slice(0, k));
   const combos = [];
   const walk = (i, pick) => {
-    if (i === pools.length) { if (pick.length) combos.push(scoreCombo(pick, form)); return; }
-    for (const e of pools[i].list) walk(i + 1, [...pick, e]);
+    if (i === top.length) { if (pick.length) combos.push(scoreCombo(pick, f)); return; }
+    for (const e of top[i]) walk(i + 1, [...pick, e]);
   };
-  walk(0, []);
+  if (cats.length) walk(0, []);
+  else if (f.soup) combos.push(scoreCombo([], f));
   combos.sort((a, b) => b.score - a.score);
-  // 다양성: 앞에서 고른 조합과 절반 이상 겹치지 않게
   const picked = [];
   for (const c of combos) {
     const ids = c.dishes.map(d => d.r.id);
-    if (picked.every(p => ids.filter(id => p.ids.includes(id)).length <= Math.floor(ids.length / 2))) picked.push({ ...c, ids });
-    if (picked.length >= 12) break;
+    if (picked.every(p => !ids.some(id => p.dishes.some(d => d.r.id === id)))) picked.push(c);
+    if (picked.length >= max) break;
   }
-  return { combos: picked, emptyCats, ctx: { kidIds: form.kidIds }, total: combos.length };
+  if (picked.length < max) for (const c of combos) { if (!picked.includes(c)) picked.push(c); if (picked.length >= max) break; }
+  return picked;
 }
-function scoreCombo(dishes, form) {
-  let score = dishes.reduce((s, d) => s + d.score, 0) / dishes.length * 1.0;
+function scoreCombo(dishes, f) {
+  let score = dishes.length ? dishes.reduce((s, d) => s + d.score, 0) / dishes.length : 50;
   const count = {};
   for (const d of dishes) for (const i of new Set(d.used.map(x => x.n))) count[i] = (count[i] || 0) + 1;
   for (const [n, c] of Object.entries(count)) {
-    if (c < 2 || (state.staples || []).includes(n)) continue;
+    if (c < 2 || (state.staples || []).includes(n) || ING[n]?.k === 'hidden') continue;
     score -= (PROTEIN_CATS.has(ING[n]?.c) ? 12 : 3) * (c - 1);
+  }
+  const soupIngs = f.soup ? soupContents(f.soup).map(ingOrGroup).filter(Boolean) : [];
+  if (f.soup) {
+    const sc = new Set(soupContents(f.soup));
+    for (const d of dishes) for (const i of d.used) if (sc.has(i.n) || sc.has(GROUP_OF[i.n])) score -= 8;
   }
   const fridgeCover = new Set(dishes.flatMap(d => d.fridgeUsed)).size;
   score += 3 * fridgeCover;
-  const nut = nutriOf(dishes.flatMap(d => d.used));
+  const nut = nutriOf([...dishes.flatMap(d => d.used), ...soupIngs]);
   for (const k of ['탄수화물', '단백질', '채소']) if (nut.has(k)) score += 6;
-  const time = Math.max(...dishes.map(d => d.r.t));
-  if (form.meal === '아침' && time > 30) score -= 8;
+  const time = dishes.length ? Math.max(...dishes.map(d => d.r.t)) : 10;
+  if (f.meal === '아침' && time > 30) score -= 8;
   const missing = [...new Set(dishes.flatMap(d => d.missing.map(m => m.label)))];
-  return { dishes, score, nut: [...nut], time, missing, fridgeCover };
+  return { dishes, score, nut: [...nut], time, missing, fridgeCover, soup: f.soup };
+}
+function swapDish(ci, di, skipThis) {
+  const R = ui.R, combo = R.combos[ci], old = combo.dishes[di], c = old.r.c;
+  const key = ci + ':' + c;
+  const tried = R.slotTried[key] = R.slotTried[key] || new Set([old.r.id]);
+  tried.add(old.r.id);
+  const skip = new Set(skipIds());
+  const inCombo = new Set(combo.dishes.map(d => d.r.id));
+  let cands = (R.pools[c] || []).filter(e => !skip.has(e.r.id) && !inCombo.has(e.r.id) && !tried.has(e.r.id));
+  if (!cands.length) {
+    toast(R.f.allowMissing < 2 ? `다른 ${CAT_INFO[c].label} 후보가 없어요. 조건에서 부족 재료 허용을 늘려 보세요` : `다른 ${CAT_INFO[c].label} 후보가 없어요`);
+    if (skipThis) { combo.dishes.splice(di, 1); R.combos[ci] = scoreCombo(combo.dishes, R.f); render(); }
+    return;
+  }
+  let best = null;
+  for (const e of cands.slice(0, 12)) {
+    const ds = combo.dishes.slice(); ds[di] = e;
+    const sc = scoreCombo(ds, R.f);
+    if (!best || sc.score > best.score) best = sc;
+  }
+  R.combos[ci] = best;
+  const nd = best.dishes[di];
+  tried.add(nd.r.id); R.seen.add(nd.r.id);
+  render();
 }
 
-/* ───────────── 분량 ───────────── */
-function refMonth(r) { return Math.min(Math.max(30, r.m[0]), r.m[1]); }
-function portionFactor(r, kidList) {
-  if (!kidList.length) return 1;
-  const ref = stageOf(refMonth(r)).portion;
-  return kidList.reduce((s, k) => s + stageOf(monthsOld(k.birth)).portion, 0) / ref;
-}
+/* ───────────── 분량 계산 ───────────── */
 const parseNum = s => s.includes('/') ? s.split('/').reduce((a, b) => a / b) : parseFloat(s);
-function fmtNum(v) {
-  const w = Math.floor(v), f = v - w;
-  if (f < 0.25) return String(w || '½');
-  if (f < 0.75) return (w ? w : '') + '½';
-  return String(w + 1);
+function parseAmt(a) { const m = String(a).match(/^([\d./]+)(.*)$/); return m ? { v: parseNum(m[1]), u: m[2] } : null; }
+function fmtFrac(v) {
+  const w = Math.floor(v + 1e-9), f = v - w;
+  const opts = [[0, ''], [0.125, '⅛'], [0.25, '¼'], [1 / 3, '⅓'], [0.5, '½'], [2 / 3, '⅔'], [0.75, '¾'], [1, '']];
+  let best = opts[0]; for (const o of opts) if (Math.abs(o[0] - f) < Math.abs(best[0] - f)) best = o;
+  const W = best[0] === 1 ? w + 1 : w;
+  if (!W && !best[1]) return '⅛';
+  return (W ? String(W) : '') + best[1];
 }
-function scaleAmt(a, f) {
-  if (a === '약간' || a === '적당량') return a;
-  const m = a.match(/^([\d./]+)(.*)$/); if (!m) return a;
-  let v = parseNum(m[1]) * f; const u = m[2];
+function fmtAmt(v, u) {
   if (u === 'g' || u === 'ml') { v = v >= 20 ? Math.round(v / 5) * 5 : Math.max(1, Math.round(v)); return v + u; }
-  return fmtNum(Math.max(0.5, v)) + u;
+  if (u === '큰술' || u === '작은술' || u === '꼬집') {
+    const tsp = u === '큰술' ? v * 3 : u === '작은술' ? v : v / 16;
+    if (tsp < 0.2) return Math.max(1, Math.round(tsp * 16)) + '꼬집';
+    if (tsp >= 2.8) return fmtFrac(tsp / 3) + '큰술';
+    return fmtFrac(tsp) + '작은술';
+  }
+  if (u === '방울') return Math.max(1, Math.round(v)) + '방울';
+  if (v >= 2.75 && u !== '컵') return Math.round(v) + u;
+  return fmtFrac(v) + u;
+}
+const scaleAmt = (a, f) => { const p = parseAmt(a); return p ? fmtAmt(p.v * f, p.u) : a; };
+function amtGrams(name, a) {
+  const p = parseAmt(a); if (!p || NO_YIELD.has(name)) return 0;
+  const x = RAW_X[name] || 1;
+  switch (p.u) {
+    case 'g': case 'ml': return p.v * x;
+    case '개': return p.v * (EACH_G[name] ?? 30);
+    case '장': return p.v * (SHEET_G[name] ?? 10);
+    case '큰술': return p.v * 15; case '작은술': return p.v * 5; case '컵': return p.v * 200;
+    case '쪽': return p.v * 5; default: return 0;
+  }
+}
+function refMonth(r) { return Math.min(Math.max(30, r.m[0]), r.m[1]); }
+const refPortion = r => stageOf(refMonth(r)).portion;
+const kidPortion = k => stageOf(monthsOld(k.birth)).portion;
+
+/* 조리 계획: 누가 얼마나 먹고, 어디서 덜어내는지 */
+function makePlan(r, kidList, adults) {
+  const kl = kidList.slice().sort((a, b) => monthsOld(a.birth) - monthsOld(b.birth));
+  const ref = refPortion(r);
+  const eat = kl.map(k => ({ k, m: monthsOld(k.birth), lv: seasonLevel(monthsOld(k.birth)), p: kidPortion(k) }));
+  const kidsP = eat.length ? eat.reduce((s, e) => s + e.p, 0) : ref;
+  const adultP = adults * ADULT_P;
+  const totalP = kidsP + adultP;
+  const F = totalP / ref;
+  const topLv = eat.length ? Math.max(...eat.map(e => e.lv)) : 2;
+  const tiers = [];
+  for (const e of eat) { let t = tiers.find(t => t.lv === e.lv); if (!t) tiers.push(t = { lv: e.lv, kids: [], p: 0 }); t.kids.push(e); t.p += e.p; }
+  const lower = r.s.length ? tiers.filter(t => t.lv < topLv) : [];
+  const top = tiers.find(t => t.lv === topLv) || { lv: 2, kids: [], p: kidsP };
+  const remainP = totalP - lower.reduce((s, t) => s + t.p, 0);
+  return { kl, eat, ref, F, totalP, kidsP, adultP, adults, topLv, tiers, lower, top, remainP };
+}
+function seasonAmt(it, portion, lv, ref) {
+  const name = it.i || it.g;
+  const mult = SALTY.has(name) ? LEVEL_MULT[lv] / LEVEL_MULT[2] : 1;
+  if (!mult) return null;
+  return scaleAmt(it.a, portion / ref * mult);
+}
+function seasonBlockedFor(it, tierKids) {
+  const ing = ING[it.i]; if (!ing || !tierKids.length) return null;
+  const minM = Math.min(...tierKids.map(e => e.m));
+  if (ing.m > minM) return `${ing.m}개월부터`;
+  const al = ing.a.find(a => tierKids.some(e => (e.k.allergies || []).includes(a)));
+  return al ? `${al} 알레르기` : null;
+}
+function estYield(r, F, ctx) {
+  let g = 0;
+  const water = ['밥죽', '국', '간식'].includes(r.c) ? 0.8 : 0.15;
+  for (const it of [...r.r, ...r.o.filter(it => resolveItem(it, ctx).have)]) {
+    const n = it.i || DATA.ingredients.groups[it.g][0];
+    g += amtGrams(n, it.a) * (n === '물' ? water : 1);
+  }
+  return g * F;
+}
+function portionHint(g, cat) {
+  if (g <= 0) return '';
+  if (cat === '국' && g > 120) return `국자로 약 ${fmtFrac(g / 80)}국자`;
+  if (g <= 300) return `밥숟가락 약 ${Math.max(1, Math.round(g / 15))}술`;
+  return `약 ${Math.round(g / 10) * 10}g`;
+}
+
+/* 조리 단계 문장 렌더링: {재료} → 재료 + 분량, 조사 자동 보정 */
+function josa(after, unit) {
+  const b = UNIT_BATCHIM[unit] ?? '';
+  const has = !!b, rieul = b === 'ㄹ';
+  return after.replace(/^(으로|로|을|를|은|는|과|와|이(?=[\s,.)]|$)|가(?=[\s,.)]|$))/, m => {
+    if (m === '으로' || m === '로') return has && !rieul ? '으로' : '로';
+    if (m === '을' || m === '를') return has ? '을' : '를';
+    if (m === '은' || m === '는') return has ? '은' : '는';
+    if (m === '과' || m === '와') return has ? '과' : '와';
+    if (m === '이' || m === '가') return has ? '이' : '가';
+    return m;
+  });
+}
+function renderText(text, lookup) {
+  const parts = text.split(/(\{[^}]+\})/);
+  let out = '';
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    const m = p.match(/^\{([^}]+)\}$/);
+    if (!m) { out += esc(p); continue; }
+    const info = lookup(m[1]);
+    if (!info) { out += esc(m[1]); continue; }
+    const unit = (String(info.amt).match(/[^\d⅛¼⅓½⅔¾.\/]+$/) || [''])[0];
+    out += info.skip
+      ? `<span class="ph off">${esc(info.name)}</span><span class="tiny muted">(${esc(info.skip)})</span>`
+      : `<b class="ph">${esc(info.name)} ${esc(info.amt)}</b>${info.opt ? '<span class="tiny muted">(있으면)</span>' : ''}`;
+    if (i + 1 < parts.length) parts[i + 1] = josa(parts[i + 1], info.skip ? '' : unit);
+  }
+  return out;
 }
 
 /* ───────────── 렌더링 ───────────── */
@@ -335,89 +532,88 @@ function syncBadge() {
   if (!Sync.family) return '';
   const s = Sync.status;
   const t = s === 'ok' ? '☁️ 동기화됨' : s === 'busy' ? '☁️ 저장 중' : s === 'offline' ? '☁️ 오프라인' : '☁️ 대기';
-  return `<span class="badge ${s === 'ok' ? 'ok' : s === 'offline' ? 'warn' : ''}">${t}</span>`;
+  return `<span class="badge sync ${s === 'ok' ? 'ok' : s === 'offline' ? 'warn' : ''}">${t}</span>`;
 }
 const chip = (label, on, act, data = '', cls = '') => `<button class="chip ${on ? 'on' : ''} ${cls}" data-act="${act}" ${data}>${label}</button>`;
+const sw = (on, act, data = '', dis = false) => `<button class="switch ${on ? 'on' : ''}" data-act="${act}" ${data} ${dis ? 'disabled' : ''} role="switch" aria-checked="${on}"><span></span></button>`;
 
 /* ── 추천 탭 ── */
-function recForm() {
-  if (!ui.rec) {
-    const h = new Date().getHours();
-    const meal = h < 10 ? '아침' : h < 15 ? '점심' : h < 17 ? '간식' : '저녁';
-    const saved = meta.recForm || {};
-    ui.rec = { kidIds: kids().map(k => k.id), meal, cats: MEAL_DEFAULT_CATS[meal].slice(), maxTime: saved.maxTime || 0, allowMissing: saved.allowMissing ?? 0 };
-  }
-  ui.rec.kidIds = ui.rec.kidIds.filter(id => kidById(id));
-  if (!ui.rec.kidIds.length && kids().length) ui.rec.kidIds = kids().map(k => k.id);
-  return ui.rec;
-}
 function viewRec() {
   if (!kids().length) {
     return top('오늘 뭐 먹지?') + `<div class="page"><div class="card empty"><div class="big">👶</div><b>먼저 아이를 등록해 주세요</b><p class="small">생년월일로 개월수를 계산해 먹을 수 있는 레시피만 골라 드려요.</p><button class="btn primary" data-act="kid-new">아이 등록하기</button></div></div>`;
   }
-  const f = recForm();
-  const selKids = f.kidIds.map(kidById).filter(Boolean);
+  const f = recForm(), sk = selKids(f), P = prefs();
   const fridgeN = (state.fridge || []).length;
+  const soups = (state.fridge || []).filter(n => ING[n]?.k === 'soup');
+  const youngest = sk.length ? Math.min(...sk.map(k => monthsOld(k.birth))) : 999;
   let h = top('오늘 뭐 먹지?', `냉장고 재료 ${fridgeN}개 · 레시피 ${RECIPES.length}개`) + '<div class="page">';
   h += `<div class="card"><span class="label">누가 먹나요?</span><div class="chips">${kids().map(k => chip(`${kidIcon(k)} ${esc(k.name)} <span class="tiny">${ageLabel(monthsOld(k.birth))}</span>`, f.kidIds.includes(k.id), 'rec-kid', `data-id="${k.id}"`)).join('')}</div>`;
+  const ca = canAdult(f);
+  h += `<div class="optrow ${ca ? '' : 'dis'}"><div class="grow"><b>🍳 어른 식사 함께</b><div class="tiny muted">${ca ? '아이 몫을 덜어낸 뒤 어른 입맛으로 마무리하는 단계를 보여드려요' : '돌 전 이유식 시기에는 쓸 수 없어요'}</div></div>${sw(ca && P.adult, 'adult-toggle', '', !ca)}</div>`;
+  if (ca && P.adult) h += `<div class="seg sm" style="margin-top:8px">${[1, 2, 3, 4].map(n => `<button class="${P.adults === n ? 'on' : ''}" data-act="adult-n" data-v="${n}">어른 ${n}명</button>`).join('')}</div>`;
   h += `<span class="label">언제 먹나요?</span><div class="seg">${MEALS.map(m => `<button class="${f.meal === m ? 'on' : ''}" data-act="rec-meal" data-v="${m}">${m}</button>`).join('')}</div>`;
-  h += `<span class="label">만들고 싶은 메뉴 <span class="tiny">(골라주신 메뉴로 한 끼 조합을 짜 드려요)</span></span><div class="chips">${CATS.map(c => chip(`${CAT_INFO[c].ic} ${CAT_INFO[c].label}`, f.cats.includes(c), 'rec-cat', `data-v="${c}"`)).join('')}</div>`;
+  if (soups.length && f.meal !== '간식') {
+    h += `<div class="optrow"><div class="grow"><b>🥣 냉동 국 사용</b><div class="tiny muted">${f.soup ? '국 메뉴는 추천하지 않고 냉동 국을 곁들여요' : '얼려둔 국이 있으면 국 대신 써요'}</div></div>${sw(!!f.soup, 'soup-toggle')}</div>`;
+    if (f.soup) h += `<div class="chips" style="margin-top:8px">${soups.map(n => { const blk = ING[n].m > youngest; return chip(`${esc(n.replace(/^냉동 /, ''))}${blk ? ` <span class="tiny">(${ING[n].m}개월~)</span>` : ''}`, f.soup === n, 'soup-pick', `data-n="${esc(n)}"`, blk ? 'warnchip' : ''); }).join('')}</div>`;
+  }
+  h += `<span class="label">만들고 싶은 메뉴 <span class="tiny">(골라주신 메뉴로 한 끼 조합을 짜 드려요)</span></span><div class="chips">${CATS.map(c => { const off = f.soup && c === '국'; return chip(`${CAT_INFO[c].ic} ${CAT_INFO[c].label}${off ? ' <span class="tiny">(냉동 국)</span>' : ''}`, f.cats.includes(c) && !off, 'rec-cat', `data-v="${c}" ${off ? 'disabled' : ''}`, off ? 'disabled' : ''); }).join('')}</div>`;
   h += `<details ${ui.recOpts ? 'open' : ''} data-act="rec-opts"><summary class="label" style="margin-top:14px">⚙️ 조건 더보기 · ${f.maxTime ? f.maxTime + '분 이내' : '시간 무관'} · 부족 재료 ${f.allowMissing}개까지</summary>`;
   h += `<span class="label">조리 시간</span><div class="seg">${[[0, '무관'], [15, '15분'], [30, '30분'], [60, '1시간']].map(([v, l]) => `<button class="${f.maxTime === v ? 'on' : ''}" data-act="rec-time" data-v="${v}">${l}</button>`).join('')}</div>`;
   h += `<span class="label">부족한 재료 허용</span><div class="seg">${[0, 1, 2].map(v => `<button class="${f.allowMissing === v ? 'on' : ''}" data-act="rec-miss" data-v="${v}">${v === 0 ? '있는 재료만' : v + '개까지'}</button>`).join('')}</div>`;
   h += `<p class="tiny muted" style="margin:8px 0 0">조리도구(${(state.tools || []).length}종)와 상비 재료는 더보기 › 조리도구·상비재료에서 바꿀 수 있어요.</p></details>`;
-  h += `<div class="sp"></div><button class="btn primary block" data-act="rec-go" ${!f.cats.length || !selKids.length ? 'disabled' : ''}>🍳 한 끼 추천받기</button>`;
+  const noCats = !effCats(f).length && !f.soup;
+  h += `<div class="sp"></div><button class="btn primary block" data-act="rec-go" ${noCats || !sk.length ? 'disabled' : ''}>🍳 한 끼 추천받기</button>`;
   if (!fridgeN) h += `<p class="tiny muted" style="text-align:center;margin:8px 0 0">냉장고가 비어 있어요. <a href="#" data-act="tab" data-tab="fridge">냉장고 재료를 먼저 넣어 주세요 ›</a></p>`;
   h += `</div>`;
-  if (selKids.length > 1) {
-    const ms = selKids.map(k => monthsOld(k.birth));
-    if (new Set(ms.map(seasonLevel)).size > 1) h += `<div class="notice">👨‍👧‍👦 나이가 다른 아이가 함께 먹어요. 레시피에 <b>간하기 전 어린 아이 몫 덜어내기</b> 단계를 넣어 드릴게요.</div>`;
-  }
+  if (sk.length > 1 && new Set(sk.map(k => seasonLevel(monthsOld(k.birth)))).size > 1) h += `<div class="notice">👨‍👧‍👦 나이가 다른 아이가 함께 먹어요. 레시피에 <b>간하기 전 어린 아이 몫 덜어내기</b> 단계를 넣어 드릴게요.</div>`;
   h += `<div id="rec-results">${viewRecResults()}</div></div>`;
   return h;
 }
+function dishRow(d, ci, di) {
+  const r = d.r, miss = d.missing.map(m => m.label);
+  let h = `<div class="dish"><button class="dish-main" data-act="open" data-id="${r.id}"><span class="cat">${CAT_INFO[r.c].ic}</span><span class="grow"><span class="name">${esc(r.n)}</span>${(state.favorites || []).includes(r.id) ? ' ❤️' : ''}<div class="sum">💡 ${esc(r.sum)}</div><div class="meta">`;
+  h += `<span class="badge">${CAT_INFO[r.c].label} · ${r.t}분</span>`;
+  h += miss.length ? `<span class="badge bad">부족: ${esc(miss.join(', '))}</span>` : `<span class="badge ok">재료 다 있어요</span>`;
+  if (d.fridgeUsed.length) h += `<span class="badge brand">🧊 ${d.fridgeUsed.length}개 사용</span>`;
+  if (d.adapt) h += `<span class="badge warn">어린 아이 몫 덜어내기</span>`;
+  if (d.newIngs.length) h += `<span class="badge warn">🆕 ${esc(d.newIngs.slice(0, 2).join(', '))}</span>`;
+  if (d.lastDays != null && d.lastDays <= 7) h += `<span class="badge">${d.lastDays === 0 ? '오늘' : d.lastDays + '일 전'} 먹음</span>`;
+  h += `</div></span></button><div class="dish-acts"><button class="iconbtn" data-act="swap" data-ci="${ci}" data-di="${di}" aria-label="이 메뉴만 바꾸기">🔄<span>바꾸기</span></button><button class="iconbtn" data-act="skip" data-ci="${ci}" data-di="${di}" aria-label="오늘은 빼기">👎<span>오늘 빼기</span></button></div></div>`;
+  return h;
+}
 function viewRecResults() {
-  const R = ui.recResults;
+  const R = ui.R;
   if (!R) return '';
-  const f = ui.rec;
+  const f = R.f;
   let h = '';
   if (R.emptyCats.length) {
     const baby = R.youngest < 12;
     h += `<div class="notice">${R.emptyCats.map(c => CAT_INFO[c].label).join(', ')}: 조건에 맞는 레시피가 없어요.${baby && R.emptyCats.some(c => c !== '밥죽') ? ' 이유식 시기에는 죽·진밥 한 그릇이 한 끼예요.' : f.allowMissing < 2 ? ' 부족 재료 허용을 늘려 보세요.' : ''}</div>`;
   }
+  if (R.notice) h += `<div class="notice">🔁 ${esc(R.notice)}${f.allowMissing < 2 ? ` <button class="btn sm" data-act="rec-miss-more">부족 재료 ${f.allowMissing + 1}개까지 허용</button>` : ''}</div>`;
   if (!R.combos.length) {
     return h + `<div class="card empty"><div class="big">🤔</div><b>지금 재료로 만들 수 있는 조합이 없어요</b><p class="small">부족한 재료를 허용하거나, 메뉴 종류를 줄여 보세요.</p>${f.allowMissing < 2 ? `<button class="btn primary" data-act="rec-miss-more">부족 재료 ${f.allowMissing + 1}개까지 허용하고 다시 보기</button>` : ''}</div>`;
   }
-  R.combos.slice(0, ui.recShown).forEach((c, idx) => {
-    const label = idx === 0 ? '🏆 베스트 조합' : `추천 조합 ${idx + 1}`;
-    h += `<div class="combo"><div class="combo-h">${label}<span class="grow"></span><span class="tiny">⏱ 약 ${c.time}분</span></div>`;
-    for (const d of c.dishes) {
-      const r = d.r;
-      const miss = d.missing.map(m => m.label);
-      h += `<button class="dish" data-act="open" data-id="${r.id}"><span class="cat">${CAT_INFO[r.c].ic}</span><span class="grow"><span class="name">${esc(r.n)}</span>${(state.favorites || []).includes(r.id) ? ' ❤️' : ''}<div class="sum">💡 ${esc(r.sum)}</div><div class="meta">`;
-      h += `<span class="badge">${CAT_INFO[r.c].label}</span>`;
-      h += miss.length ? `<span class="badge bad">부족: ${esc(miss.join(', '))}</span>` : `<span class="badge ok">재료 다 있어요</span>`;
-      if (d.fridgeUsed.length) h += `<span class="badge brand">🧊 ${d.fridgeUsed.length}개 사용</span>`;
-      if (d.adapt) h += `<span class="badge warn">어린 아이 몫 덜어내기</span>`;
-      if (d.newIngs.length) h += `<span class="badge warn">🆕 ${esc(d.newIngs.slice(0, 2).join(', '))}</span>`;
-      if (d.lastDays != null && d.lastDays <= 7) h += `<span class="badge">${d.lastDays === 0 ? '오늘' : d.lastDays + '일 전'} 먹음</span>`;
-      h += `</div></span><span class="chev">›</span></button>`;
-    }
+  R.combos.forEach((c, ci) => {
+    const label = ci === 0 && R.round === 1 ? '🏆 베스트 조합' : `추천 조합 ${ci + 1}`;
+    h += `<div class="combo"><div class="combo-h">${label}<span class="grow"></span>${R.adult ? `<span class="tiny">🍳 어른 ${prefs().adults}명 포함 · </span>` : ''}<span class="tiny">⏱ 약 ${c.time + (R.adult ? 3 : 0)}분</span></div>`;
+    c.dishes.forEach((d, di) => { h += dishRow(d, ci, di); });
+    if (c.soup) h += `<div class="dish soup"><span class="cat">🥣</span><span class="grow"><span class="name">${esc(c.soup)}</span><div class="sum">❄️ 냉장실에서 해동한 뒤 냄비에 팔팔 끓여 한 김 식혀 주세요${R.adult ? ' · 어른 몫은 국간장 ½작은술을 더해요' : ''}</div></span></div>`;
     const noRice = !f.cats.includes('밥죽') && f.meal !== '간식' && !c.dishes.some(d => d.r.c === '밥죽');
     h += `<div class="combo-f">${c.nut.filter(n => ['탄수화물', '단백질', '채소', '칼슘', '과일'].includes(n)).map(n => `<span class="badge ok">✓ ${n}</span>`).join(' ')}${noRice ? '<span class="badge">🍚 밥은 따로 곁들여요</span>' : ''}<span class="grow"></span>`;
-    if (c.missing.length) h += `<button class="btn sm" data-act="combo-shop" data-i="${idx}">🛒 부족 재료 담기</button>`;
-    h += `<button class="btn sm primary" data-act="combo-eat" data-i="${idx}">이걸로 할게요</button></div></div>`;
+    if (c.missing.length) h += `<button class="btn sm" data-act="combo-shop" data-i="${ci}">🛒 부족 재료 담기</button>`;
+    h += `<button class="btn sm primary" data-act="combo-eat" data-i="${ci}">이걸로 할게요</button></div></div>`;
   });
-  if (R.combos.length > ui.recShown) h += `<button class="btn block" data-act="rec-more">다른 조합 더 보기 (${R.combos.length - ui.recShown})</button>`;
-  else h += `<button class="btn block ghost" data-act="rec-go">🔄 새로 섞어서 추천</button>`;
+  h += `<button class="btn block" data-act="rec-reroll">🎲 다른 조합 보기</button>`;
   return h;
 }
 
 /* ── 냉장고 탭 ── */
 function viewFridge() {
   const fridge = state.fridge || [];
-  let h = top('냉장고', `재료 ${fridge.length}개 · 상비 재료 ${(state.staples || []).length}개`) + '<div class="page">';
-  h += `<div class="search"><input id="fridge-q" type="search" placeholder="재료 검색 (예: 호박, ㅇㅎㅂ, 주키니)" value="${esc(ui.fridgeQ)}" autocomplete="off"></div>`;
+  const staples = (state.staples || []).filter(n => ING[n]?.k !== 'hidden');
+  let h = top('냉장고', `재료 ${fridge.length}개 · 상비 재료 ${staples.length}개`) + '<div class="page">';
+  h += `<div class="search"><input id="fridge-q" type="search" placeholder="재료 검색 (예: 호박, ㅇㅎㅂ, 미역국)" value="${esc(ui.fridgeQ)}" autocomplete="off"></div>`;
   h += `<div class="hscroll" style="margin-top:10px">${['전체', ...ING_CATS].map(c => chip(c === '전체' ? '전체' : `${ING_IC[c]} ${c}`, ui.fridgeCat === c, 'fridge-cat', `data-v="${c}"`)).join('')}</div>`;
   h += `<div id="fridge-list">${viewFridgeList()}</div>`;
   h += `<div class="card"><div class="row"><h2 class="grow" style="margin:0">🧊 지금 냉장고에 있는 재료</h2>${fridge.length ? '<button class="btn sm danger" data-act="fridge-clear">비우기</button>' : ''}</div><div class="sp"></div>`;
@@ -427,18 +623,19 @@ function viewFridge() {
     for (const n of fridge) { const c = ING[n]?.c || '가공·기타'; (byCat[c] = byCat[c] || []).push(n); }
     for (const c of ING_CATS) if (byCat[c]) h += `<div class="cat-h">${ING_IC[c]} ${c}</div><div class="chips">${byCat[c].map(n => `<button class="chip soft" data-act="fridge-toggle" data-n="${esc(n)}">${esc(n)} <span class="x">✕</span></button>`).join('')}</div>`;
   }
-  h += `</div><div class="card"><h2>⭐ 상비 재료 <span class="tiny muted">(항상 있는 걸로 계산해요)</span></h2><div class="chips">${(state.staples || []).map(n => `<span class="chip">${esc(n)}</span>`).join('')}</div><button class="btn sm" data-act="pick-staples">상비 재료 편집</button></div>`;
+  h += `</div><div class="card"><h2>⭐ 상비 재료 <span class="tiny muted">(항상 있는 걸로 계산해요)</span></h2><div class="chips">${staples.map(n => `<span class="chip">${esc(n)}</span>`).join('')}</div><button class="btn sm" data-act="pick-staples">상비 재료 편집</button></div>`;
   return h + '</div>';
 }
 function viewFridgeList() {
   const showAll = ui.fridgeQ || ui.fridgeCat !== '전체';
-  if (!showAll) return `<p class="tiny muted" style="margin:6px 2px">검색하거나 카테고리를 누르면 재료 목록이 나와요. 재료를 누르면 냉장고에 담겨요.</p>`;
+  if (!showAll) return `<p class="tiny muted" style="margin:6px 2px">검색하거나 카테고리를 누르면 재료 목록이 나와요. 재료를 누르면 냉장고에 담겨요. 얼려둔 국과 냉동 재료는 ❄️ 냉동식품에 있어요.</p>`;
   const list = searchIng(ui.fridgeQ, ui.fridgeCat);
   const fridge = new Set(state.fridge || []), staples = new Set(state.staples || []);
   if (!list.length) return `<div class="notice">"${esc(ui.fridgeQ)}"에 맞는 재료가 없어요.</div>`;
   return `<div class="list">${list.slice(0, 80).map(i => {
     const st = staples.has(i.n), on = fridge.has(i.n) || st;
-    return `<div class="li"><button class="row grow" data-act="fridge-toggle" data-n="${esc(i.n)}" style="text-align:left"><span class="check ${on ? 'on' : ''}">✓</span><span class="grow"><span class="t">${esc(i.n)}</span> <span class="tiny muted">${i.m <= 6 ? '' : i.m + '개월~'}</span>${i.a.length ? ` <span class="badge warn">${esc(i.a.join('·'))}</span>` : ''}${i.s.length ? `<div class="d">${esc(i.s.slice(0, 4).join(', '))}</div>` : ''}</span></button><button class="star-btn ${st ? 'on' : ''}" data-act="staple-toggle" data-n="${esc(i.n)}" aria-label="상비 재료">⭐</button></div>`;
+    const sub = i.sub ? `<div class="d">↪ ${esc(i.sub.join(', '))} 대신 쓸 수 있어요</div>` : i.k === 'soup' ? `<div class="d">🥣 냉동 국 · 추천에서 국 대신 사용</div>` : i.s.length ? `<div class="d">${esc(i.s.slice(0, 4).join(', '))}</div>` : '';
+    return `<div class="li"><button class="row grow" data-act="fridge-toggle" data-n="${esc(i.n)}" style="text-align:left"><span class="check ${on ? 'on' : ''}">✓</span><span class="grow"><span class="t">${esc(i.n)}</span> <span class="tiny muted">${i.k === 'adult' ? '어른용' : i.m <= 6 ? '' : i.m + '개월~'}</span>${i.a.length ? ` <span class="badge warn">${esc(i.a.join('·'))}</span>` : ''}${sub}</span></button><button class="star-btn ${st ? 'on' : ''}" data-act="staple-toggle" data-n="${esc(i.n)}" aria-label="상비 재료">⭐</button></div>`;
   }).join('')}</div>${list.length > 80 ? `<p class="tiny muted">${list.length - 80}개 더 있어요. 검색어를 더 입력해 주세요.</p>` : ''}`;
 }
 
@@ -467,7 +664,7 @@ function viewRecipeList() {
   if (!ev.length) return `<div class="card empty"><div class="big">🔍</div>조건에 맞는 레시피가 없어요.</div>`;
   return `<div class="list">${ev.slice(0, 150).map(e => {
     const r = e.r, hv = e.req.length - e.missing.length;
-    return `<button class="li" data-act="open" data-id="${r.id}"><span style="font-size:24px">${CAT_INFO[r.c].ic}</span><span class="grow"><span class="t">${esc(r.n)}</span>${(state.favorites || []).includes(r.id) ? ' ❤️' : ''}<div class="d">${r.m[0]}개월~ · ${r.t}분 · 재료 ${hv}/${e.req.length}</div></span>${e.missing.length ? '' : '<span class="badge ok">가능</span>'}<span class="chev">›</span></button>`;
+    return `<button class="li" data-act="open" data-id="${r.id}"><span style="font-size:24px">${CAT_INFO[r.c].ic}</span><span class="grow"><span class="t">${esc(r.n)}</span>${(state.favorites || []).includes(r.id) ? ' ❤️' : ''}<div class="d">${r.m[0]}개월~ · ${r.t}분 · 재료 ${hv}/${e.req.length}${adultOK(r) ? ' · 🍳 어른 함께' : ''}</div></span>${e.missing.length ? '' : '<span class="badge ok">가능</span>'}<span class="chev">›</span></button>`;
   }).join('')}</div>${ev.length > 150 ? `<p class="tiny muted">${ev.length - 150}개 더 있어요. 검색어로 좁혀 주세요.</p>` : ''}`;
 }
 
@@ -489,7 +686,7 @@ function viewGuide() {
 }
 function viewGuideList(kid, m) {
   const ctx = makeCtx(kid ? [kid] : [], { youngest: m });
-  const list = searchIng(ui.guideQ, '전체');
+  const list = searchIng(ui.guideQ, '전체', { noAdult: true, noSoup: true }).filter(i => i.c !== '냉동식품');
   const ok = [], caution = [], no = [], allergy = [];
   for (const i of list) {
     if (i.m > m) no.push(i);
@@ -519,7 +716,7 @@ function viewMore() {
     ${li('family', '👨‍👩‍👧', '가족 공유', Sync.family ? `${esc(Sync.family.name)} · 연결됨` : Sync.user ? '가족을 만들거나 참여하세요' : '배우자와 같은 냉장고를 함께 써요')}
     ${li('shopping', '🛒', '장보기 목록', shopN ? `살 것 ${shopN}개` : '비어 있어요')}
     ${li('history', '📅', '식단 기록', `${(state.history || []).length}끼 기록됨`)}
-    ${li('settings', '🍳', '조리도구 · 상비재료', `도구 ${(state.tools || []).length}종 · 상비 ${(state.staples || []).length}개`)}
+    ${li('settings', '🍳', '조리도구 · 상비재료', `도구 ${(state.tools || []).length}종 · 상비 ${(state.staples || []).filter(n => ING[n]?.k !== 'hidden').length}개`)}
     ${li('backup', '💾', '백업 · 레시피 DB', `레시피 ${RECIPES.length}개 · v${DATA.version}`)}
   </div><p class="tiny muted" style="text-align:center">아이 냉장고 파먹기 v${APP_VERSION}<br>레시피와 가이드는 참고용이며 의학적 조언이 아니에요.</p></div>`;
 }
@@ -563,14 +760,14 @@ function viewHistory() {
   let cur = '';
   for (const e of hist.slice(0, 120)) {
     if (e.date !== cur) { cur = e.date; const dd = daysBetween(e.date, todayStr()); h += `<div class="cat-h">${e.date} ${dd === 0 ? '(오늘)' : dd === 1 ? '(어제)' : ''}</div>`; }
-    h += `<div class="card" style="margin:6px 0;padding:12px 14px"><div class="row"><span class="badge brand">${esc(e.meal)}</span><span class="tiny muted grow">${(e.kids || []).map(id => esc(kidById(id)?.name || '')).filter(Boolean).join(', ')}</span><button class="close" data-act="hist-rm" data-id="${e.id}">✕</button></div><div class="chips" style="margin-top:8px">${e.rids.map(id => RECIPE_BY_ID[id] ? `<button class="chip" data-act="open" data-id="${id}">${CAT_INFO[RECIPE_BY_ID[id].c].ic} ${esc(RECIPE_BY_ID[id].n)}</button>` : '').join('')}</div></div>`;
+    h += `<div class="card" style="margin:6px 0;padding:12px 14px"><div class="row"><span class="badge brand">${esc(e.meal)}</span>${e.adults ? `<span class="badge">🍳 어른 ${e.adults}명</span>` : ''}<span class="tiny muted grow">${(e.kids || []).map(id => esc(kidById(id)?.name || '')).filter(Boolean).join(', ')}</span><button class="close" data-act="hist-rm" data-id="${e.id}">✕</button></div><div class="chips" style="margin-top:8px">${e.rids.map(id => RECIPE_BY_ID[id] ? `<button class="chip" data-act="open" data-id="${id}">${CAT_INFO[RECIPE_BY_ID[id].c].ic} ${esc(RECIPE_BY_ID[id].n)}</button>` : '').join('')}${e.soup ? `<span class="chip">🥣 ${esc(e.soup)}</span>` : ''}</div></div>`;
   }
   return h + '</div>';
 }
 function viewSettings() {
   let h = top('조리도구 · 상비재료', '', 'more-back') + '<div class="page">';
   h += `<div class="card"><h2>🍳 우리 집 조리도구</h2><p class="tiny muted" style="margin-top:-6px">없는 도구만 쓰는 레시피는 추천에서 빠져요.</p><div class="chips">${TOOLS.map(t => chip(t, (state.tools || []).includes(t), 'tool-toggle', `data-v="${t}"`)).join('')}</div></div>`;
-  h += `<div class="card"><h2>⭐ 상비 재료</h2><p class="tiny muted" style="margin-top:-6px">항상 집에 있는 재료예요. 냉장고에 따로 넣지 않아도 있는 걸로 계산해요.</p><div class="chips">${(state.staples || []).map(n => `<button class="chip soft" data-act="staple-toggle" data-n="${esc(n)}">${esc(n)} <span class="x">✕</span></button>`).join('')}</div><button class="btn sm" data-act="pick-staples">+ 상비 재료 추가</button></div>`;
+  h += `<div class="card"><h2>⭐ 상비 재료</h2><p class="tiny muted" style="margin-top:-6px">항상 집에 있는 재료예요. 냉장고에 따로 넣지 않아도 있는 걸로 계산해요.</p><div class="chips">${(state.staples || []).filter(n => ING[n]?.k !== 'hidden').map(n => `<button class="chip soft" data-act="staple-toggle" data-n="${esc(n)}">${esc(n)} <span class="x">✕</span></button>`).join('')}</div><button class="btn sm" data-act="pick-staples">+ 상비 재료 추가</button></div>`;
   return h + '</div>';
 }
 function viewBackup() {
@@ -601,7 +798,7 @@ function viewFamily() {
   }
   h += `<div class="card"><h2>🏠 ${esc(Sync.family.name)}</h2><p class="small muted" style="margin-top:-4px">배우자에게 아래 초대코드를 보내 주세요.</p><div class="code">${esc(Sync.family.invite_code)}</div><button class="btn block" data-act="fam-share">초대코드 보내기</button></div>`;
   h += `<div class="card"><h2>👥 구성원</h2>${(Sync.members || []).map(m => `<div class="ing-row">${m.user_id === Sync.user.id ? '🙋' : '👤'} <b>${esc(m.display_name || '가족')}</b>${m.user_id === Sync.user.id ? ' <span class="tiny muted">(나)</span>' : ''}</div>`).join('')}</div>`;
-  h += `<div class="card"><h2>☁️ 동기화</h2><p class="small">${syncBadge()} ${Sync.lastSync ? '마지막 동기화 ' + new Date(Sync.lastSync).toLocaleTimeString('ko-KR') : ''}</p><p class="tiny muted">아이 정보, 냉장고, 상비재료, 조리도구, 즐겨찾기, 식단 기록, 장보기 목록이 실시간으로 공유돼요. 인터넷이 끊겨도 쓸 수 있고, 다시 연결되면 자동으로 맞춰져요.</p><button class="btn sm" data-act="sync-now">지금 동기화</button></div>`;
+  h += `<div class="card"><h2>☁️ 동기화</h2><p class="small">${syncBadge()} ${Sync.lastSync ? '마지막 동기화 ' + new Date(Sync.lastSync).toLocaleTimeString('ko-KR') : ''}</p><p class="tiny muted">아이 정보, 냉장고, 상비재료, 조리도구, 즐겨찾기, 식단 기록, 장보기 목록, 어른 식사 설정이 실시간으로 공유돼요. 인터넷이 끊겨도 쓸 수 있고, 다시 연결되면 자동으로 맞춰져요.</p><button class="btn sm" data-act="sync-now">지금 동기화</button></div>`;
   return h + `<div class="row"><button class="btn ghost grow" data-act="auth-logout">로그아웃</button><button class="btn ghost grow" data-act="fam-leave" style="color:var(--bad)">가족 나가기</button></div><p class="tiny muted">${esc(Sync.user.email)}</p></div>`;
 }
 
@@ -629,75 +826,145 @@ function detailKids() {
 function viewDetailTitle() { const r = RECIPE_BY_ID[ui.detail.id]; return r ? `${CAT_INFO[r.c].ic} ${esc(r.n)}` : ''; }
 function viewDetail() {
   const r = RECIPE_BY_ID[ui.detail.id]; if (!r) return '';
-  const kl = detailKids();
-  const ctx = makeCtx(kl, { strict: false, allowMissing: 99 });
+  const kl = detailKids(), P = prefs();
+  const canA = adultOK(r) && kl.some(k => monthsOld(k.birth) >= 12);
+  const adults = canA && P.adult ? P.adults : 0;
+  const spicy = !!(adults && P.spicy && (r.ad.si || []).length);
+  const ctx = makeCtx(kl, { strict: false, allowMissing: 99, adult: !!adults });
   const e = evalRecipe(r, ctx);
-  const months = kl.map(k => monthsOld(k.birth));
-  const f = portionFactor(r, kl);
+  const plan = makePlan(r, kl, adults);
   const fav = (state.favorites || []).includes(r.id), rating = (state.ratings || {})[r.id] || 0;
   let h = `<div class="summary"><span>💡</span><span>${esc(r.sum)}</span></div>`;
-  h += `<div class="row wrap small muted"><span class="badge">${CAT_INFO[r.c].label}</span><span class="badge">⏱ ${r.t}분</span><span class="badge">${r.m[0]}개월 ~ ${r.m[1] >= 144 ? '12세' : r.m[1] >= 24 ? ageLabel(r.m[1]) : r.m[1] + '개월'}</span>${r.tl.length ? `<span class="badge">🍳 ${esc(r.tl.join('·'))}</span>` : ''}<span class="badge">${r.ml.join('·')}</span></div>`;
-  // 경고
+  h += `<div class="row wrap small muted"><span class="badge">${CAT_INFO[r.c].label}</span><span class="badge">⏱ ${r.t}분${adults ? ' +3분' : ''}</span><span class="badge">${r.m[0]}개월 ~ ${r.m[1] >= 144 ? '12세' : r.m[1] >= 24 ? ageLabel(r.m[1]) : r.m[1] + '개월'}</span>${r.tl.length ? `<span class="badge">🍳 ${esc(r.tl.join('·'))}</span>` : ''}<span class="badge">${r.ml.join('·')}</span></div>`;
+  if (canA) {
+    h += `<div class="card toggles"><div class="optrow"><div class="grow"><b>🍳 어른 식사 함께</b><div class="tiny muted">아이 몫을 덜고 어른 입맛으로 마무리해요</div></div>${sw(!!adults, 'adult-toggle')}</div>`;
+    if (adults) {
+      h += `<div class="seg sm" style="margin-top:8px">${[1, 2, 3, 4].map(n => `<button class="${P.adults === n ? 'on' : ''}" data-act="adult-n" data-v="${n}">어른 ${n}명</button>`).join('')}</div>`;
+      if ((r.ad.si || []).length) h += `<div class="optrow" style="margin-top:10px"><div class="grow"><b>🌶️ 매운맛 추가</b><div class="tiny muted">어른 몫에만 매운 재료를 더해요</div></div>${sw(spicy, 'spicy-toggle')}</div>`;
+    }
+    h += `</div>`;
+  }
   const warns = [];
   if (kl.length && r.m[0] > ctx.youngest) warns.push(kl.length > 1 && ctx.youngest >= 9 ? `<b>${esc(kl[0].name)}</b>에게는 조금 이른 메뉴예요 (${r.m[0]}개월~). 간하기 전에 덜어서 더 잘게 다지고 부드럽게 익혀 주세요.` : `<b>${esc(kl[0].name)}</b>에게는 아직 이른 메뉴예요 (${r.m[0]}개월부터).`);
   for (const x of [...e.req, ...e.opt]) if (!x.ok && x.why) warns.push(`<b>${esc(x.label)}</b>: ${esc(x.why)} → ${e.req.includes(x) ? '이 재료가 필수라 만들기 어려워요' : '빼고 만드세요'}`);
   const usedW = new Set();
-  for (const x of [...e.req, ...e.opt]) { const ing = x.use; if (ing && ing.w && !usedW.has(ing.n) && (/질식|금지|알레르기/.test(ing.w) || ing.m + 12 > ctx.youngest)) { usedW.add(ing.n); warns.push(`<b>${esc(ing.n)}</b>: ${esc(ing.w)}`); } }
+  for (const x of [...e.req, ...e.opt]) { const ing = x.use; if (ing && ing.w && !usedW.has(ing.n) && (/질식|금지|알레르기/.test(ing.w) || (ing.m + 12 > ctx.youngest && /주의|위험|확인|소량|나트륨|껍질|가시|제거|잘게|작게|질겨|질김|으깨|갈아|익혀|진밥|데쳐/.test(ing.w)))) { usedW.add(ing.n); warns.push(`<b>${esc(ing.n)}</b>: ${esc(ing.w)}`); } }
   if (e.newIngs.length) warns.push(`🆕 처음 먹는 재료: <b>${esc(e.newIngs.join(', '))}</b> — 오전에 소량으로 주고 반응을 지켜보세요.`);
   if (warns.length) h += `<div class="warnbox">⚠️ 주의<br>${warns.map(w => '· ' + w).join('<br>')}</div>`;
-  // 분량
-  if (kl.length) h += `<p class="small" style="margin:12px 0 4px"><b>👨‍👧 ${kl.map(k => `${esc(k.name)}(${ageLabel(monthsOld(k.birth))})`).join(', ')}</b> 기준 · 기본 분량의 <b>${f.toFixed(1)}배</b></p>`;
-  // 재료
-  const ingRow = (x, kind) => {
+  const who = [...plan.eat.map(x => `${esc(x.k.name)}(${ageLabel(x.m)})`), adults ? `어른 ${adults}명` : ''].filter(Boolean).join(', ');
+  if (who) h += `<p class="small" style="margin:12px 0 4px"><b>👨‍👧 ${who}</b> 기준 · 기본 분량의 <b>${plan.F.toFixed(1)}배</b></p>`;
+  const ingRow = (x, kind, amt) => {
     const name = x.group ? `${esc(x.label)} <span class="tiny muted">(${esc((x.have ? [x.have.n] : x.alts.slice(0, 3)).join('/'))})</span>` : esc(x.label);
     const st = !x.ok ? `<span class="badge bad">${esc(x.why || '불가')}</span>` : x.have ? '<span class="ok-dot">✓</span>' : kind === 'r' ? '<span class="miss-dot">✕</span>' : '<span class="tiny muted">없음</span>';
-    return `<div class="ing-row">${st}<span class="grow" style="${!x.ok ? 'text-decoration:line-through;opacity:.6' : ''}">${name}</span><span class="amt">${scaleAmt(x.item.a, f)}</span></div>`;
+    const subNote = x.sub ? ` <span class="badge brand">❄️ ${esc(x.sub)}로 대체</span>` : '';
+    return `<div class="ing-row">${st}<span class="grow" style="${!x.ok ? 'text-decoration:line-through;opacity:.6' : ''}">${name}${subNote}</span><span class="amt">${amt}</span></div>`;
   };
-  h += `<div class="card"><h2>재료</h2>${e.req.map(x => ingRow(x, 'r')).join('')}`;
+  h += `<div class="card"><h2>재료</h2>${e.req.map(x => ingRow(x, 'r', scaleAmt(x.item.a, plan.F))).join('')}`;
   if (e.missing.length) h += `<div class="sp"></div><button class="btn sm" data-act="detail-shop">🛒 부족한 ${e.missing.length}개 장보기에 담기</button>`;
-  if (e.opt.length) h += `<h3>있으면 좋아요 (선택)</h3>${e.opt.map(x => ingRow(x, 'o')).join('')}`;
-  if (e.sea.length) h += `<h3>양념 ${ctx.youngest < 12 ? '<span class="badge warn">돌 전 아이 몫은 넣지 않아요</span>' : ''}</h3>${e.sea.map(x => ingRow(x, 's')).join('')}`;
+  if (e.opt.length) h += `<h3>있으면 좋아요 (선택)</h3>${e.opt.map(x => ingRow(x, 'o', scaleAmt(x.item.a, plan.F))).join('')}`;
+  if (r.s.length) {
+    const allLv0 = plan.eat.length && plan.topLv === 0 && !adults;
+    h += `<h3>양념 ${allLv0 ? '<span class="badge warn">돌 전이라 넣지 않아요</span>' : plan.lower.length ? '<span class="badge warn">어린 아이 몫은 덜어낸 뒤 따로</span>' : ''}</h3>`;
+    h += e.sea.map((x, i) => {
+      const it = r.s[i];
+      const blk = seasonBlockedFor(it, plan.top.kids);
+      const a = blk ? '' : seasonAmt(it, plan.remainP, plan.topLv, plan.ref);
+      return ingRow({ ...x, ok: !blk, why: blk || x.why }, 's', a || (blk ? '' : '안 넣어요'));
+    }).join('');
+  }
+  if (adults) {
+    const adI = (r.ad.i || []).map(it => resolveItem(it, ctx, true));
+    const sI = spicy ? r.ad.si.map(it => resolveItem(it, ctx, true)) : [];
+    if (adI.length) h += `<h3>🍳 어른 마무리 재료 <span class="tiny muted">(어른 ${adults}명)</span></h3>${adI.map(x => ingRow(x, 'a', scaleAmt(x.item.a, adults))).join('')}`;
+    if (sI.length) h += `<h3>🌶️ 매운맛 재료</h3>${sI.map(x => ingRow(x, 'a', scaleAmt(x.item.a, adults))).join('')}`;
+    const adMiss = [...adI, ...sI].filter(x => !x.have);
+    if (adMiss.length) h += `<div class="sp"></div><button class="btn sm" data-act="detail-shop-adult">🛒 어른용 부족 ${adMiss.length}개 담기</button>`;
+  }
   h += `</div>`;
-  // 아이별 맞춤
   if (kl.length) {
-    h += `<div class="card"><h2>🧒 아이별 맞춤 조리</h2>`;
-    kl.forEach((k, i) => {
-      const m = months[i], st = stageOf(m), share = st.portion / stageOf(refMonth(r)).portion;
+    h += `<details class="card" ${kl.length > 1 || plan.eat.some(x => x.m < 15) ? 'open' : ''}><summary>🧒 아이별 질감 · 양</summary><div class="sp"></div>`;
+    plan.eat.forEach(x => {
+      const st = stageOf(x.m), share = x.p / plan.ref;
       let extra = '';
-      if (m < 12 && ['메인', '반찬'].includes(r.c)) extra = ' 잘게 다져서 죽이나 진밥에 섞어 주세요.';
-      if (m < 9 && !['밥죽', '간식'].includes(r.c)) extra = ' 아직은 죽 형태가 좋아요. 재료만 곱게 갈아 죽에 넣어 주세요.';
-      if (m >= 36 && r.m[1] < 24) extra = ' 큰 아이에게는 양을 늘리고 일반 밥으로 주세요.';
-      h += `<div class="kidadj"><b>${kidIcon(k)} ${esc(k.name)}</b> <span class="tiny muted">${ageLabel(m)} · ${st.label}</span><br>질감: ${st.texture} · 크기: ${st.size}<br>간: ${st.season} · 양: 약 ${fmtNum(share)}인분${extra}</div>`;
+      if (x.m < 12 && ['메인', '반찬'].includes(r.c)) extra = ' 잘게 다져서 죽이나 진밥에 섞어 주세요.';
+      if (x.m < 9 && !['밥죽', '간식'].includes(r.c)) extra = ' 아직은 죽 형태가 좋아요. 재료만 곱게 갈아 죽에 넣어 주세요.';
+      if (x.m >= 36 && r.m[1] < 24) extra = ' 큰 아이에게는 양을 늘리고 일반 밥으로 주세요.';
+      h += `<div class="kidadj"><b>${kidIcon(x.k)} ${esc(x.k.name)}</b> <span class="tiny muted">${ageLabel(x.m)} · ${st.label}</span><br>질감: ${st.texture} · 크기: ${st.size}<br>간: ${st.season} · 양: 기본의 약 ${fmtFrac(share)}배${extra}</div>`;
     });
-    h += `</div>`;
+    h += `</details>`;
   }
-  // 조리 순서
-  const levels = months.map(seasonLevel);
-  const minL = levels.length ? Math.min(...levels) : 2, maxL = levels.length ? Math.max(...levels) : 2;
-  const totalP = kl.reduce((s, k) => s + stageOf(monthsOld(k.birth)).portion, 0) || 1;
-  const younger = kl.filter((k, i) => levels[i] < maxL);
-  const youngShare = Math.round(100 * younger.reduce((s, k) => s + stageOf(monthsOld(k.birth)).portion, 0) / totalP);
-  const splitTxt = () => `<b>덜어내기</b> — 간을 하기 전에 <b>${younger.map(k => esc(k.name)).join(', ')}</b> 몫(전체의 약 ${youngShare}%)을 먼저 덜어 두세요.${younger.some(k => monthsOld(k.birth) < 12) ? ' 덜어낸 몫은 간 없이 그대로 줘요.' : ' 덜어낸 몫은 아주 약하게만 간해요.'}`;
-  let split = false;
-  const steps = r.st.map((s, i) => {
-    const isS = s.startsWith('@'); const t = esc(s.replace(/^@/, ''));
-    let out = '';
-    const needSplit = kl.length > 1 && minL < maxL && !split;
-    if (isS && needSplit) { out += `<li class="split">${splitTxt()}</li>`; split = true; }
-    if (!isS && needSplit && i === r.st.length - 1 && r.s.length && !r.st.some(x => x.startsWith('@'))) { out += `<li class="split">${splitTxt()}</li>`; split = true; }
-    if (isS && kl.length && maxL === 0) out += `<li class="skip"><span class="t">${t}</span><div class="tiny">돌 전에는 이 단계(간하기)를 건너뛰어요.</div></li>`;
-    else out += `<li>${t}${isS && split ? ` <span class="tiny muted">(남은 ${kl.filter((k, j) => levels[j] === maxL).map(k => esc(k.name)).join(', ')} 몫에만)</span>` : ''}</li>`;
-    return out;
-  }).join('');
-  h += `<div class="card"><h2>만드는 법</h2><ol class="steps">${steps}</ol>`;
-  if (kl.length > 1) {
-    const oldestStage = stageIdx(Math.max(...months));
-    const softer = kl.filter(k => stageIdx(monthsOld(k.birth)) < oldestStage);
-    for (const k of softer) { const st = stageOf(monthsOld(k.birth)); h += `<div class="kidadj">🥄 <b>${esc(k.name)}</b> 몫은 ${st.size} 크기로 한 번 더 다지거나, 물을 조금 넣고 더 끓여 <b>${st.texture}</b>로 맞춰 주세요.</div>`; }
-  }
-  h += `</div>`;
+  h += viewSteps(r, e, plan, ctx, adults, spicy);
   h += `<div class="card"><div class="row"><button class="btn ${fav ? 'primary' : ''} grow" data-act="fav" data-id="${r.id}">${fav ? '❤️ 즐겨찾기됨' : '🤍 즐겨찾기'}</button><button class="btn primary grow" data-act="detail-eat">🍽 오늘 먹었어요</button></div><div class="row" style="justify-content:center;margin-top:10px"><span class="small muted">아이 반응</span>${[1, 2, 3, 4, 5].map(n => `<button class="star-btn ${n <= rating ? 'on' : ''}" data-act="rate" data-n="${n}">⭐</button>`).join('')}</div></div>`;
   return h;
+}
+function viewSteps(r, e, plan, ctx, adults, spicy) {
+  const byLabel = {};
+  r.r.forEach(it => byLabel[it.i || it.g] = { it, kind: 'r' });
+  r.o.forEach((it, i) => byLabel[it.i || it.g] = { it, kind: 'o', ev: e.opt[i] });
+  r.s.forEach(it => byLabel[it.i || it.g] = { it, kind: 's' });
+  const adLabel = {};
+  if (adults) [...(r.ad.i || []), ...(spicy ? r.ad.si : [])].forEach(it => adLabel[it.i || it.g] = it);
+  const topBlk = it => seasonBlockedFor(it, plan.top.kids);
+  const mainLookup = label => {
+    const b = byLabel[label]; if (!b) return null;
+    if (b.kind === 's') {
+      const blk = topBlk(b.it);
+      if (blk) return { name: label, amt: '', skip: `아이 몫엔 빼요 · ${blk}` };
+      const a = seasonAmt(b.it, plan.remainP, plan.topLv, plan.ref);
+      return a ? { name: label, amt: a } : { name: label, amt: '', skip: '돌 전이라 안 넣어요' };
+    }
+    const o = b.kind === 'o' ? b.ev : null;
+    if (o && !o.ok) return { name: label, amt: scaleAmt(b.it.a, plan.F), skip: `빼요 · ${o.why}` };
+    return { name: label, amt: scaleAmt(b.it.a, plan.F), opt: b.kind === 'o' && !(o && o.have) };
+  };
+  const adultLookup = label => adLabel[label] ? { name: label, amt: scaleAmt(adLabel[label].a, adults) } : mainLookup(label);
+  const yieldG = estYield(r, plan.F, ctx);
+  const stepLi = (s, lookup, cls = '') => `<li class="${cls}"><span class="t"><span class="sic">${stepIcon(s.x)}</span>${renderText(s.x, lookup)}</span>${s.k ? `<div class="cue">👀 ${renderText(s.k, lookup)}</div>` : ''}</li>`;
+  const tierSplit = t => {
+    const pct = Math.round(100 * t.p / plan.totalP);
+    const hint = portionHint(yieldG * t.p / plan.totalP, r.c);
+    const names = t.kids.map(x => esc(x.k.name)).join(', ');
+    let body = `<b>${names} 몫 먼저 덜기</b> — 간하기 전에 전체의 약 ${pct}%${hint ? ` (${hint})` : ''}를 그릇에 덜어 두세요.`;
+    if (t.lv === 0) body += ' 덜어낸 몫은 <b>간 없이</b> 그대로 줘요.';
+    else {
+      const items = r.s.map(it => {
+        if (seasonBlockedFor(it, t.kids)) return null;
+        const a = seasonAmt(it, t.p, t.lv, plan.ref); return a ? `${esc(it.i || it.g)} <b>${a}</b>` : null;
+      }).filter(Boolean);
+      body += items.length ? ` 덜어낸 몫에는 ${items.join(', ')}만 넣어 섞어요 (국물 요리는 작은 냄비에 덜어 한소끔 끓여요).` : ' 덜어낸 몫은 간 없이 줘요.';
+    }
+    const mm = Math.min(...t.kids.map(x => x.m));
+    if (stageIdx(mm) < stageIdx(Math.max(...plan.eat.map(x => x.m)))) { const st = stageOf(mm); body += ` <span class="tiny">질감은 ${st.size} 크기, ${st.texture}로 맞춰요.</span>`; }
+    return `<li class="split">${body}</li>`;
+  };
+  let lis = '', splitDone = false;
+  const firstAt = r.st.findIndex(s => s.a);
+  const allLv0 = plan.eat.length && plan.topLv === 0 && !adults;
+  const remainNames = [...plan.top.kids.map(x => esc(x.k.name)), adults ? '어른' : ''].filter(Boolean).join('·');
+  r.st.forEach((s, i) => {
+    if (i === firstAt && plan.lower.length && !splitDone) { lis += plan.lower.map(tierSplit).join(''); splitDone = true; }
+    if (s.a && allLv0) lis += `<li class="skip"><span class="t"><span class="sic">🧂</span>${renderText(s.x, mainLookup)}</span><div class="tiny">돌 전에는 이 단계(간하기)를 건너뛰어요.</div></li>`;
+    else {
+      let li = stepLi(s, mainLookup, s.a ? 'season' : '');
+      if (s.a && plan.lower.length) li = li.replace('</span><div class="cue">', ` <span class="tiny muted">(남은 ${remainNames} 몫에)</span></span><div class="cue">`);
+      lis += li;
+    }
+  });
+  let h = `<div class="card"><h2>만드는 법</h2><ol class="steps">${lis}</ol>`;
+  if (adults) {
+    const kidsTopP = plan.top.kids.reduce((s, x) => s + x.p, 0);
+    const pct = Math.round(100 * kidsTopP / plan.totalP);
+    const hint = portionHint(yieldG * kidsTopP / plan.totalP, r.c);
+    const names = plan.top.kids.map(x => esc(x.k.name)).join(', ') || '아이';
+    let al = `<li class="split"><b>${names} 몫 덜기</b> — 전체의 약 ${pct}%${hint ? ` (${hint})` : ''}를 아이 그릇에 덜어요. 남은 것이 어른 ${adults}명 몫이에요.</li>`;
+    const blocked = r.s.filter(it => topBlk(it));
+    if (blocked.length) al += `<li><span class="t"><span class="sic">🧂</span>아이 몫에서 뺐던 ${blocked.map(it => `<b class="ph">${esc(it.i)} ${seasonAmt(it, plan.adultP, 2, plan.ref)}</b>`).join(', ')}를 어른 몫에 넣어요</span></li>`;
+    al += (r.ad.st || []).map(s => stepLi(s, adultLookup)).join('');
+    if (!(r.ad.st || []).length && !blocked.length) al += `<li><span class="t"><span class="sic">🍽️</span>어른도 같은 음식을 그대로 함께 먹어요</span></li>`;
+    if (spicy) al += (r.ad.ss || []).map(s => stepLi(s, adultLookup, 'spicy')).join('');
+    h += `<div class="adult-h">🍳 어른 마무리 <span class="tiny">어른 ${adults}명${spicy ? ' · 🌶️ 매운맛' : ''}</span></div><ol class="steps adult">${al}</ol>`;
+  }
+  return h + `</div>`;
 }
 function viewPicker() {
   const p = ui.picker;
@@ -707,7 +974,7 @@ function viewPicker() {
 }
 function viewPickerList() {
   const p = ui.picker;
-  const list = searchIng(p.q || '', '전체').slice(0, 100);
+  const list = searchIng(p.q || '', '전체', { noSoup: true }).slice(0, 100);
   return `<div class="list">${list.map(i => `<button class="li" data-act="picker-toggle" data-n="${esc(i.n)}"><span class="check ${p.sel.has(i.n) ? 'on' : ''}">✓</span><span class="grow"><span class="t">${esc(i.n)}</span> <span class="tiny muted">${ING_IC[i.c]} ${i.c}</span></span></button>`).join('')}</div>`;
 }
 
@@ -725,26 +992,38 @@ function toggleIn(arr, v) { const s = new Set(arr || []); s.has(v) ? s.delete(v)
 function addShopping(names, from) {
   const cur = state.shopping || [];
   const exist = new Set(cur.filter(s => !s.done).map(s => s.name));
-  const add = names.filter(n => !exist.has(n)).map(n => ({ id: uid(), name: n, done: false, from }));
+  const add = [...new Set(names)].filter(n => !exist.has(n)).map(n => ({ id: uid(), name: n, done: false, from }));
   if (add.length) setKey('shopping', [...cur, ...add]);
   toast(add.length ? `장보기 목록에 ${add.length}개 담았어요` : '이미 장보기 목록에 있어요');
 }
-function logMeal(rids, meal, kidIds) {
-  const entry = { id: uid(), date: todayStr(), meal, rids, kids: kidIds, ts: Date.now() };
+function logMeal(rids, meal, kidIds, extra = {}) {
+  const entry = { id: uid(), date: todayStr(), meal, rids, kids: kidIds, ts: Date.now(), ...extra };
   const hist = [...(state.history || []), entry].slice(-400);
-  // 먹어본 재료 자동 기록 (24개월 미만)
-  const usedNames = new Set();
-  for (const id of rids) { const r = RECIPE_BY_ID[id]; if (!r) continue; const ctx = makeCtx(kidIds.map(kidById).filter(Boolean), { strict: false }); const e = evalRecipe(r, ctx); e.used.forEach(i => usedNames.add(i.n)); }
-  const ch = kids().map(k => kidIds.includes(k.id) && monthsOld(k.birth) < 24 && (k.tried || []).length ? { ...k, tried: [...new Set([...(k.tried || []), ...usedNames])] } : k);
-  state.children = ch; meta.stamps.children = new Date().toISOString(); if (!meta.pending.includes('children')) meta.pending.push('children');
+  const kl = kidIds.map(kidById).filter(Boolean);
+  const ctx = makeCtx(kl, { strict: false, adult: !!extra.adults });
+  const usedNames = new Set(), fromFridge = new Set();
+  for (const id of rids) {
+    const r = RECIPE_BY_ID[id]; if (!r) continue;
+    const e = evalRecipe(r, ctx);
+    for (const i of e.used) { usedNames.add(i.n); if (ctx.fridge.has(i.n)) fromFridge.add(ctx.subFrom[i.n] || i.n); }
+    for (const x of e.adI) if (x.have && (state.fridge || []).includes(x.have.n)) fromFridge.add(x.have.n);
+  }
+  if (extra.soup) fromFridge.add(extra.soup);
+  state.children = kids().map(k => kidIds.includes(k.id) && monthsOld(k.birth) < 24 && (k.tried || []).length ? { ...k, tried: [...new Set([...(k.tried || []), ...[...usedNames].filter(n => ING[n]?.k !== 'hidden')])] } : k);
+  touch('children');
   setKey('history', hist, { render: false });
-  // 사용한 냉장고 재료 빼기
-  const fridgeUsed = [...usedNames].filter(n => (state.fridge || []).includes(n));
+  const fridgeUsed = [...fromFridge].filter(n => (state.fridge || []).includes(n));
   if (fridgeUsed.length) {
     ui.sheet = { title: '사용한 재료를 뺄까요?', sel: new Set(fridgeUsed), items: fridgeUsed, body: () => `<p class="small muted" style="margin-top:12px">다 쓴 재료를 선택하면 냉장고에서 빼 드려요. 남은 재료는 선택을 풀어 주세요.</p><div class="list">${ui.sheet.items.map(n => `<button class="li" data-act="used-toggle" data-n="${esc(n)}"><span class="check ${ui.sheet.sel.has(n) ? 'on' : ''}">✓</span><span class="grow t">${esc(n)}</span></button>`).join('')}</div><button class="btn primary block" data-act="used-apply">선택한 재료 냉장고에서 빼기</button><div class="sp"></div><button class="btn ghost block" data-act="sheet-close">그대로 두기</button>` };
   }
   toast('식단에 기록했어요 🍽');
   render();
+}
+function curDetailCtx() {
+  const r = RECIPE_BY_ID[ui.detail.id], kl = detailKids(), P = prefs();
+  const canA = adultOK(r) && kl.some(k => monthsOld(k.birth) >= 12);
+  const adults = canA && P.adult ? P.adults : 0;
+  return { r, kl, adults, ctx: makeCtx(kl, { strict: false, adult: !!adults }) };
 }
 
 const ACTIONS = {
@@ -765,32 +1044,47 @@ const ACTIONS = {
     ui.kidEdit = null; ui.more = 'kids'; setKey('children', list); toast('저장했어요');
   },
   'kid-del': () => { if (!confirm(`${ui.kidEdit.name}의 정보를 삭제할까요?`)) return; const id = ui.kidEdit.id; ui.kidEdit = null; ui.more = 'kids'; setKey('children', kids().filter(k => k.id !== id)); },
-  'rec-kid': el => { const f = recForm(); f.kidIds = toggleIn(f.kidIds, el.dataset.id); ui.recResults = null; render(); },
-  'rec-meal': el => { const f = recForm(); f.meal = el.dataset.v; f.cats = MEAL_DEFAULT_CATS[f.meal].slice(); ui.recResults = null; render(); },
-  'rec-cat': el => { const f = recForm(); f.cats = toggleIn(f.cats, el.dataset.v).sort((a, b) => CATS.indexOf(a) - CATS.indexOf(b)); ui.recResults = null; render(); },
-  'rec-time': el => { const f = recForm(); f.maxTime = +el.dataset.v; meta.recForm = { maxTime: f.maxTime, allowMissing: f.allowMissing }; saveLocal(); ui.recResults = null; render(); },
-  'rec-miss': el => { const f = recForm(); f.allowMissing = +el.dataset.v; meta.recForm = { maxTime: f.maxTime, allowMissing: f.allowMissing }; saveLocal(); ui.recResults = null; render(); },
-  'rec-miss-more': () => { const f = recForm(); f.allowMissing = Math.min(2, f.allowMissing + 1); ACTIONS['rec-go'](); },
+  'rec-kid': el => { const f = recForm(); f.kidIds = toggleIn(f.kidIds, el.dataset.id); ui.R = null; render(); },
+  'rec-meal': el => { const f = recForm(); f.meal = el.dataset.v; f.cats = MEAL_DEFAULT_CATS[f.meal].slice(); if (f.meal === '간식') f.soup = null; ui.R = null; render(); },
+  'rec-cat': el => { const f = recForm(); if (el.disabled) return; f.cats = toggleIn(f.cats, el.dataset.v).sort((a, b) => CATS.indexOf(a) - CATS.indexOf(b)); ui.R = null; render(); },
+  'rec-time': el => { const f = recForm(); f.maxTime = +el.dataset.v; meta.recForm = { maxTime: f.maxTime, allowMissing: f.allowMissing }; saveLocal(); ui.R = null; render(); },
+  'rec-miss': el => { const f = recForm(); f.allowMissing = +el.dataset.v; meta.recForm = { maxTime: f.maxTime, allowMissing: f.allowMissing }; saveLocal(); ui.R = null; render(); },
+  'rec-miss-more': () => { const f = recForm(); f.allowMissing = Math.min(2, f.allowMissing + 1); meta.recForm = { maxTime: f.maxTime, allowMissing: f.allowMissing }; saveLocal(); ACTIONS['rec-go'](); },
+  'adult-toggle': () => { if (!ui.detail) ui.R = null; setPrefs({ adult: !prefs().adult }); },
+  'adult-n': el => { setPrefs({ adults: +el.dataset.v }); },
+  'spicy-toggle': () => { setPrefs({ spicy: !prefs().spicy }); },
+  'soup-toggle': () => { const f = recForm(); const soups = (state.fridge || []).filter(n => ING[n]?.k === 'soup'); f.soup = f.soup ? null : soups[0]; ui.R = null; render(); },
+  'soup-pick': el => { const f = recForm(); f.soup = el.dataset.n; ui.R = null; render(); },
   'rec-go': () => {
-    const f = recForm(); const res = recommend(f);
-    res.youngest = Math.min(...f.kidIds.map(id => monthsOld(kidById(id).birth)));
-    ui.recResults = res; ui.recShown = 3; render();
+    startRec(); render();
     setTimeout(() => $('#rec-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   },
-  'rec-more': () => { ui.recShown += 3; render(); },
-  'combo-shop': el => { const c = ui.recResults.combos[+el.dataset.i]; addShopping(c.missing.map(m => m), c.dishes.map(d => d.r.n).join(', ')); },
-  'combo-eat': el => { const c = ui.recResults.combos[+el.dataset.i]; logMeal(c.dishes.map(d => d.r.id), ui.rec.meal, ui.rec.kidIds); },
+  'rec-reroll': () => { if (!ui.R) return; nextCombos(); render(); setTimeout(() => $('#rec-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); },
+  swap: el => swapDish(+el.dataset.ci, +el.dataset.di),
+  skip: el => {
+    const d = ui.R.combos[+el.dataset.ci].dishes[+el.dataset.di];
+    const ids = skipIds(); if (!ids.includes(d.r.id)) ids.push(d.r.id); saveLocal();
+    toast(`'${d.r.n}'은(는) 오늘 추천에서 뺐어요`);
+    swapDish(+el.dataset.ci, +el.dataset.di, true);
+  },
+  'combo-shop': el => { const c = ui.R.combos[+el.dataset.i]; addShopping(c.missing, c.dishes.map(d => d.r.n).join(', ')); },
+  'combo-eat': el => { const c = ui.R.combos[+el.dataset.i]; logMeal(c.dishes.map(d => d.r.id), ui.R.f.meal, ui.R.f.kidIds, { adults: ui.R.adult ? prefs().adults : 0, soup: c.soup || null }); },
   open: el => { ui.detail = { id: el.dataset.id, kidIds: ui.tab === 'rec' ? ui.rec?.kidIds : null }; ui._keepSheet = false; renderOverlays(); },
   'detail-close': () => { ui.detail = null; renderOverlays(); },
-  'detail-shop': () => { const r = RECIPE_BY_ID[ui.detail.id]; const e = evalRecipe(r, makeCtx(detailKids(), { strict: false })); addShopping(e.missing.map(m => m.label), r.n); },
-  'detail-eat': () => { const r = RECIPE_BY_ID[ui.detail.id]; const h = new Date().getHours(); const meal = ui.rec?.meal || (h < 10 ? '아침' : h < 15 ? '점심' : h < 17 ? '간식' : '저녁'); ui.detail = null; logMeal([r.id], meal, detailKids().map(k => k.id)); },
+  'detail-shop': () => { const { r, ctx } = curDetailCtx(); const e = evalRecipe(r, ctx); addShopping(e.missing.map(m => m.label), r.n); },
+  'detail-shop-adult': () => {
+    const { r, ctx } = curDetailCtx(); const P = prefs();
+    const items = [...(r.ad.i || []), ...(P.spicy ? r.ad.si || [] : [])].map(it => resolveItem(it, ctx, true)).filter(x => !x.have).map(x => x.label);
+    addShopping(items, r.n + ' (어른용)');
+  },
+  'detail-eat': () => { const { r, kl, adults } = curDetailCtx(); const h = new Date().getHours(); const meal = ui.rec?.meal || (h < 10 ? '아침' : h < 15 ? '점심' : h < 17 ? '간식' : '저녁'); ui.detail = null; logMeal([r.id], meal, kl.map(k => k.id), { adults }); },
   fav: el => { setKey('favorites', toggleIn(state.favorites, el.dataset.id)); },
   rate: el => { const r = { ...(state.ratings || {}) }; const n = +el.dataset.n; r[ui.detail.id] = r[ui.detail.id] === n ? 0 : n; setKey('ratings', r); },
   'fridge-cat': el => { ui.fridgeCat = el.dataset.v; render(); },
   'fridge-toggle': el => { const n = el.dataset.n; if ((state.staples || []).includes(n) && !(state.fridge || []).includes(n)) return toast(`${n}은(는) 상비 재료예요 (⭐로 해제)`); setKey('fridge', toggleIn(state.fridge, n)); },
   'staple-toggle': el => { setKey('staples', toggleIn(state.staples, el.dataset.n)); },
   'fridge-clear': () => { if (confirm('냉장고 재료를 모두 비울까요? (상비 재료는 그대로예요)')) setKey('fridge', []); },
-  'pick-staples': () => { ui.picker = { title: '상비 재료', sel: new Set(state.staples || []), target: 'staples', q: '' }; ui._keepSheet = false; render(); },
+  'pick-staples': () => { ui.picker = { title: '상비 재료', sel: new Set((state.staples || []).filter(n => ING[n]?.k !== 'hidden')), target: 'staples', q: '' }; ui._keepSheet = false; render(); },
   'picker-toggle': el => { const p = ui.picker, n = el.dataset.n; p.sel.has(n) ? p.sel.delete(n) : p.sel.add(n); renderOverlays(); },
   'picker-done': () => {
     const p = ui.picker; ui.picker = null;
@@ -810,8 +1104,8 @@ const ACTIONS = {
   'shop-clear': () => { if (confirm('장보기 목록을 비울까요?')) setKey('shopping', []); },
   'shop-to-fridge': () => {
     const done = state.shopping.filter(s => s.done);
-    const known = done.map(s => s.name).filter(n => ING[n]);
-    state.fridge = [...new Set([...(state.fridge || []), ...known])]; meta.stamps.fridge = new Date().toISOString(); if (!meta.pending.includes('fridge')) meta.pending.push('fridge');
+    const known = done.map(s => s.name).filter(n => ING[n] || DATA.ingredients.groups[n]).map(n => ING[n] ? n : DATA.ingredients.groups[n][0]);
+    state.fridge = [...new Set([...(state.fridge || []), ...known])]; touch('fridge');
     setKey('shopping', state.shopping.filter(s => !s.done));
     toast(`냉장고에 ${known.length}개 넣었어요${done.length > known.length ? ` (재료 목록에 없는 ${done.length - known.length}개 제외)` : ''}`);
   },
@@ -822,7 +1116,7 @@ const ACTIONS = {
   'used-apply': () => { const sel = ui.sheet.sel; ui.sheet = null; setKey('fridge', (state.fridge || []).filter(n => !sel.has(n))); toast(`냉장고에서 ${sel.size}개 뺐어요`); },
   'data-update': () => checkDataUpdate(true),
   export: () => {
-    const blob = new Blob([JSON.stringify({ app: 'kids-fridge', v: 1, at: new Date().toISOString(), state }, null, 1)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ app: 'kids-fridge', v: 2, at: new Date().toISOString(), state }, null, 1)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `냉장고파먹기-백업-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove();
   },
   theme: el => { LS.set('kf_theme', el.dataset.v); applyTheme(); render(); },
@@ -849,7 +1143,7 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
-  if (act === 'rec-opts') { ui.recOpts = !el.open; return; }  // <details> 토글 상태 기억
+  if (act === 'rec-opts') { ui.recOpts = !el.open; return; }
   if (el.tagName === 'A') e.preventDefault();
   const fn = ACTIONS[act];
   if (fn) { e.preventDefault(); fn(el); }
@@ -871,7 +1165,8 @@ document.addEventListener('change', async e => {
       const j = JSON.parse(await file.text());
       if (j.app !== 'kids-fridge' || !j.state) throw new Error('형식');
       if (!confirm('백업 파일로 현재 데이터를 덮어쓸까요?')) return;
-      for (const k of SYNC_KEYS) if (j.state[k] !== undefined) { state[k] = j.state[k]; meta.stamps[k] = new Date().toISOString(); if (!meta.pending.includes(k)) meta.pending.push(k); }
+      for (const k of SYNC_KEYS) if (j.state[k] !== undefined) { state[k] = j.state[k]; touch(k); }
+      state.prefs = Object.assign(defaultPrefs(), state.prefs || {});
       saveLocal(); Sync.schedule(); toast('불러왔어요'); render();
     } catch (err) { toast('백업 파일을 읽을 수 없어요'); }
   }
@@ -934,15 +1229,15 @@ const Sync = {
     this.members = data || []; render();
   },
   async createFamily(name, me) {
-    const { data, error } = await this.client.rpc('create_family', { p_name: name, p_display: me });
+    const { error } = await this.client.rpc('create_family', { p_name: name, p_display: me });
     if (error) return this.err(error, '가족 만들기 실패');
-    meta.pending = [...SYNC_KEYS]; saveLocal();       // 내 데이터를 올림
+    meta.pending = [...SYNC_KEYS]; saveLocal();
     await this.loadFamily(); toast('가족을 만들었어요! 초대코드를 배우자에게 보내세요');
   },
   async joinFamily(code, me) {
     const { error } = await this.client.rpc('join_family', { p_code: code, p_display: me });
     if (error) return this.err(error, /not found|없/.test(error.message) ? '초대코드를 찾을 수 없어요' : '참여 실패');
-    meta.pending = []; meta.stamps = {}; saveLocal();  // 가족 데이터를 우선
+    meta.pending = []; meta.stamps = {}; saveLocal();
     await this.loadFamily(); toast('가족에 참여했어요!');
   },
   async leaveFamily() {
@@ -955,22 +1250,22 @@ const Sync = {
     const { data, error } = await this.client.from('family_state').select('key,value,updated_at').eq('family_id', this.family.id);
     if (error) { this.status = 'offline'; render(); if (manual) toast('동기화 실패 · 인터넷 연결을 확인해 주세요'); return; }
     const remote = Object.fromEntries((data || []).map(r => [r.key, r]));
-    let changed = false;
     for (const k of SYNC_KEYS) {
       const rr = remote[k], local = meta.stamps[k] ? Date.parse(meta.stamps[k]) : 0;
-      if (meta.pending.includes(k) && (!rr || local >= Date.parse(rr.updated_at))) continue; // 내 변경이 최신 → 올리기
+      if (meta.pending.includes(k) && (!rr || local >= Date.parse(rr.updated_at))) continue;
       if (rr) {
         if (!local || Date.parse(rr.updated_at) > local || !meta.pending.includes(k)) {
-          if (JSON.stringify(state[k]) !== JSON.stringify(rr.value)) { state[k] = rr.value; changed = true; }
+          state[k] = rr.value;
           meta.stamps[k] = rr.updated_at; meta.pending = meta.pending.filter(x => x !== k);
         }
       } else if (!meta.pending.includes(k)) meta.pending.push(k);
     }
-    if (state.staples == null && DATA) state.staples = DATA.ingredients.items.filter(i => i.st).map(i => i.n);
+    if (state.staples == null && DATA) state.staples = DATA.ingredients.items.filter(i => i.st && i.k !== 'hidden').map(i => i.n);
+    state.prefs = Object.assign(defaultPrefs(), state.prefs || {});
     saveLocal();
     await this.flush();
     this.status = 'ok'; this.lastSync = Date.now();
-    if (changed) render(); else render();
+    render();
     if (manual) toast('동기화했어요');
   },
   schedule() { if (!this.family) return; clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 700); },
@@ -984,7 +1279,7 @@ const Sync = {
     if (error) { this.status = 'offline'; render(); return; }
     meta.pending = meta.pending.filter(k => !keys.includes(k)); saveLocal();
     this.status = 'ok'; this.lastSync = Date.now();
-    const b = document.querySelector('.top .badge'); if (b) b.outerHTML = syncBadge();
+    const b = document.querySelector('.top .badge.sync'); if (b) b.outerHTML = syncBadge();
   },
   subscribe() {
     this.unsubscribe();
@@ -994,6 +1289,7 @@ const Sync = {
         const local = meta.stamps[row.key] ? Date.parse(meta.stamps[row.key]) : 0;
         if (Date.parse(row.updated_at) <= local) return;
         state[row.key] = row.value; meta.stamps[row.key] = row.updated_at; meta.pending = meta.pending.filter(x => x !== row.key);
+        if (row.key === 'prefs') state.prefs = Object.assign(defaultPrefs(), state.prefs || {});
         saveLocal(); this.lastSync = Date.now();
         if (row.updated_by !== this.user.id) toast(row.key === 'fridge' ? '가족이 냉장고를 업데이트했어요 🧊' : '가족이 정보를 업데이트했어요');
         render();
@@ -1008,7 +1304,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   if (Sync.family) Sync.pullAll();
   if (Date.now() - (meta.lastUpdateCheck || 0) > 6 * 3600e3) checkDataUpdate();
-  if (ui.tab !== 'more' || !ui.kidEdit) render();   // 날짜가 바뀌면 개월수 갱신
+  if (ui.tab !== 'more' || !ui.kidEdit) render();
 });
 
 /* ───────────── 시작 ───────────── */

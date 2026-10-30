@@ -96,12 +96,17 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 .combo{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow);margin:14px 0;overflow:hidden}
 .combo-h{display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--brand-soft);color:var(--brand-deep);font-weight:700}
-.dish{display:flex;gap:12px;padding:12px 14px;border-top:1px solid var(--line);width:100%;text-align:left}
-.dish:first-of-type{border-top:0}
+.dish{display:flex;gap:4px;padding:12px 10px 12px 14px;border-top:1px solid var(--line);align-items:flex-start}
+.combo-h + .dish{border-top:0}
+.dish-main{display:flex;gap:12px;flex:1;min-width:0;text-align:left}
 .dish .cat{flex:none;width:44px;height:44px;border-radius:12px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:22px}
 .dish .name{font-weight:700;font-size:16px}
 .dish .sum{font-size:13px;color:var(--muted);margin-top:1px}
 .dish .meta{font-size:12px;margin-top:4px;display:flex;gap:6px;flex-wrap:wrap}
+.dish.soup{background:color-mix(in srgb,var(--ok-soft) 50%,transparent)}
+.dish-acts{display:flex;flex-direction:column;gap:4px;flex:none}
+.iconbtn{display:flex;flex-direction:column;align-items:center;gap:1px;font-size:17px;padding:6px 6px;border-radius:10px;background:var(--bg);min-width:52px}
+.iconbtn span{font-size:10px;color:var(--muted);font-weight:600;white-space:nowrap}
 .combo-f{display:flex;gap:8px;padding:10px 14px 14px;flex-wrap:wrap;align-items:center}
 
 .empty{text-align:center;padding:36px 20px;color:var(--muted)}
@@ -148,3 +153,27 @@ input[type=checkbox],input[type=radio]{width:auto}
 details summary{cursor:pointer;font-weight:600;list-style:none}
 details summary::-webkit-details-marker{display:none}
 .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:26px;letter-spacing:.2em;font-weight:700;text-align:center;padding:12px;background:var(--bg);border-radius:12px;margin:8px 0}
+
+.optrow{display:flex;align-items:center;gap:12px;margin-top:14px;padding:12px;border-radius:12px;background:var(--bg)}
+.optrow b{font-size:15px}
+.optrow.dis{opacity:.55}
+.toggles .optrow{margin-top:0}
+.switch{flex:none;width:50px;height:30px;border-radius:999px;background:var(--line);position:relative;transition:background .15s}
+.switch span{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
+.switch.on{background:var(--ok)}
+.switch.on span{left:23px}
+.switch:disabled{opacity:.5}
+.seg.sm button{padding:6px 4px;font-size:13px}
+.chip.disabled{opacity:.45;text-decoration:line-through}
+.chip.warnchip{border-color:var(--warn)}
+.steps li .t{display:block}
+.sic{display:inline-block;width:22px;margin-right:2px}
+.cue{font-size:13px;color:var(--ok);margin-top:4px;padding-left:24px}
+.ph{color:var(--brand-deep);font-weight:700}
+.ph.off{text-decoration:line-through;color:var(--muted);font-weight:600}
+.steps li.season{background:var(--warn-soft);border-radius:12px;padding:10px 12px 10px 40px;margin:4px 0;border:0}
+.adult-h{margin:18px 0 6px;padding:10px 12px;border-radius:12px;background:var(--brand-soft);color:var(--brand-deep);font-weight:800;font-size:16px}
+.adult-h .tiny{font-weight:600;margin-left:6px}
+.steps.adult li::before{background:var(--brand);color:#fff}
+.steps li.spicy{background:var(--bad-soft);border-radius:12px;padding:10px 12px 10px 40px;margin:4px 0;border:0}
+.steps li.spicy::before{content:"🌶️";background:transparent;counter-increment:none}
